@@ -1,7 +1,3 @@
-<<<<<<< HEAD
-=======
-
->>>>>>> 9e987fd96304b0f21e53ac7f7f3af268a58fdd16
 #include <stdio.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,12 +12,9 @@
 #include <pthread.h>
 
 
-<<<<<<< HEAD
 #define PORT 5550
 #define BACKLOG 20
 #define BUF_SIZE 1024
-=======
->>>>>>> 9e987fd96304b0f21e53ac7f7f3af268a58fdd16
 
 
 void trim_end(char *s) {
@@ -68,11 +61,6 @@ void *client_thread(void *arg) {
     pthread_detach(pthread_self());
 
     char line[BUF_SIZE];
-<<<<<<< HEAD
-=======
-    bool logged_in = false;
-    Account current = {"", 0};
->>>>>>> 9e987fd96304b0f21e53ac7f7f3af268a58fdd16
 
     send_reply(sockfd, "100");  /* Greeting */
 
@@ -96,13 +84,6 @@ void *client_thread(void *arg) {
         }
     }
 
-<<<<<<< HEAD
-
-=======
-    if (logged_in) {
-        remove_active_user(current.username);
-    }
->>>>>>> 9e987fd96304b0f21e53ac7f7f3af268a58fdd16
 
     close(sockfd);
     printf("[thread %lu] connection closed.\n", (unsigned long)pthread_self());
@@ -164,8 +145,4 @@ int main(int argc, char *argv[]) {
 
     close(listenfd);
     return 0;
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> 9e987fd96304b0f21e53ac7f7f3af268a58fdd16
