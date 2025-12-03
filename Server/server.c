@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-#include <stdio.h>
-=======
 
->>>>>>> eb538a682d1947fbdc995f12a02861894f15eb56
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,10 +15,7 @@
 #define PORT 5550
 #define BACKLOG 20
 #define BUF_SIZE 1024
-<<<<<<< HEAD
-=======
 
->>>>>>> eb538a682d1947fbdc995f12a02861894f15eb56
 
 
 void trim_end(char *s) {
@@ -92,10 +85,7 @@ void *client_thread(void *arg) {
         }
     }
 
-<<<<<<< HEAD
 
-=======
->>>>>>> eb538a682d1947fbdc995f12a02861894f15eb56
     close(sockfd);
     printf("[thread %lu] connection closed.\n", (unsigned long)pthread_self());
     return NULL;
@@ -156,8 +146,5 @@ int main(int argc, char *argv[]) {
 
     close(listenfd);
     return 0;
-<<<<<<< HEAD
-=======
 
->>>>>>> eb538a682d1947fbdc995f12a02861894f15eb56
 }
