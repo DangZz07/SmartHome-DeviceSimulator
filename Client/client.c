@@ -1,8 +1,10 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
 
-
-#include <stdio.h>
-
+#define BUFF_SIZE 1024
 
 
 
@@ -100,7 +102,6 @@ int main(int argc, char *argv[]) {
     char buff[BUFF_SIZE];
 
     while (1) {
-        show_menu();
         printf(" Enter command: ");
         fgets(buff, BUFF_SIZE, stdin);
         buff[strcspn(buff, "\n")] = '\0';  // Remove newline
