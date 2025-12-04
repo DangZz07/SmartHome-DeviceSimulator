@@ -49,11 +49,7 @@
     {
       "deviceId": "DEV_002",
       "type": "fan",
-<<<<<<< HEAD
-      "name": "Quạt trần phòng khách",
-=======
       "name": "living room fan",
->>>>>>> feature/Dang
 
       "auth": {
         "password": "abc123",
