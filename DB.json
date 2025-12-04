@@ -1,25 +1,20 @@
 {
-
-
   "home": {
     "homeName": "My Home",
     "rooms": [
       {
         "roomId": "ROOM_01",
-        "roomName": "Phòng Khách",
+        "roomName": "Living Room",
         "devices": ["DEV_001", "DEV_002"]
       }
     ]
   },
 
-
-
-
   "devices": [
     {
       "deviceId": "DEV_001",
       "type": "light", 
-      "name": "Đèn phòng khách",
+      "name": "living room light",
 
       "auth": {
         "password": "123456",
@@ -54,7 +49,11 @@
     {
       "deviceId": "DEV_002",
       "type": "fan",
+<<<<<<< HEAD
       "name": "Quạt trần phòng khách",
+=======
+      "name": "living room fan",
+>>>>>>> feature/Dang
 
       "auth": {
         "password": "abc123",
