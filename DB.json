@@ -1,0 +1,86 @@
+{
+
+
+  "home": {
+    "homeName": "My Home",
+    "rooms": [
+      {
+        "roomId": "ROOM_01",
+        "roomName": "Phòng Khách",
+        "devices": ["DEV_001", "DEV_002"]
+      }
+    ]
+  },
+
+
+
+
+  "devices": [
+    {
+      "deviceId": "DEV_001",
+      "type": "light", 
+      "name": "Đèn phòng khách",
+
+      "auth": {
+        "password": "123456",
+        "connected": true,  
+        "Token": "TKN_9876"    },
+
+      "state": {
+        "power": "OFF",
+        "timer": 0,
+        "speed": null,
+        "mode": null,
+        "temperature": null
+      },
+
+      "powerUsage": {
+        "currentWatt": 15,
+        "usageHistory": {
+          "day": 1.2,
+          "month": 20.5,
+          "year": 200.7
+        }
+      },
+
+      "logs": [
+        {
+          "time": "2025-12-02 21:45:00",
+          "action": "POWER ON"
+             }
+      ]
+    },
+
+    {
+      "deviceId": "DEV_002",
+      "type": "fan",
+      "name": "Quạt trần phòng khách",
+
+      "auth": {
+        "password": "abc123",
+        "connected": false,
+        "Token": null
+       },
+
+      "state": {
+        "power": "ON",
+        "timer": 0,
+        "speed": 3,
+        "mode": null,
+        "temperature": null
+      },
+
+      "powerUsage": {
+        "currentWatt": 45,
+        "usageHistory": {
+          "day": 2.3,
+          "month": 40.1,
+          "year": 410.0
+        }
+      },
+
+      "logs": []
+    }
+  ]
+}
+
