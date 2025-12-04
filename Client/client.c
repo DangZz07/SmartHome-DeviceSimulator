@@ -6,7 +6,24 @@
 #include <sys/socket.h>
 
 #define BUF_SIZE 2048
-
+void interpret_response(const char *code) {
+    if (strcmp(code, "100") == 0) 
+        printf("→ CONNECTED TO SERVER\n");
+    else if (strcmp(code, "200") == 0) 
+        printf("→ CONNECT OK\n");
+    else if (strcmp(code, "201") == 0) 
+        printf("→ WRONG PASSWORD\n");
+    else if (strcmp(code, "202") == 0) 
+        printf("→ DEVICE NOT FOUND\n");
+    else if (strcmp(code, "203") == 0) 
+        printf("→ INVALID FORMAT\n");
+    else if (strcmp(code, "210") == 0) 
+        printf("→ PASSWORD CHANGED OK\n");
+    else if (strcmp(code, "211") == 0) 
+        printf("→ WRONG OLD PASSWORD\n");
+    else if (strcmp(code, "300") == 0) 
+        printf("→ UNKNOWN COMMAND\n");
+}
 // ============================ Read EXACT 1 LINE ============================
 int receive_line(int sock, char *buffer, size_t size) {
     size_t idx = 0;
@@ -113,9 +130,12 @@ int main(int argc, char *argv[]) {
             continue;
         }
 
-
-        if (receive_line(sock, buffer, sizeof(buffer)))
-            printf(" %s\n", buffer);
+        if (receive_line(sock, buffer, sizeof(buffer))) {
+            interpret_response(buffer);
+        } else {
+            printf("Connection closed by server.\n");
+            break;
+        }
     }
 
     close(sock);

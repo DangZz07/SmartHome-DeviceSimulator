@@ -407,47 +407,47 @@ void *client_thread(void *arg) {
 
 
         if (sscanf(line + 8, "%63s %63s", id, pass) != 2) {
-            send_reply(sockfd, "ERROR Invalid format");
+            send_reply(sockfd, "203");
             continue;
         }
 
         Device *d = find_device(db, id);
         if (!d) {
-            send_reply(sockfd, "ERROR Not found");
+            send_reply(sockfd, "202");
             continue;
         }
 
         if (strcmp(d->auth.password, pass) != 0) {
-            send_reply(sockfd, "ERROR Wrong password");
+            send_reply(sockfd, "201");
             continue;
         }
 
         d->auth.connected = 1;
         save_database(db);
-        send_reply(sockfd, "OK");
+        send_reply(sockfd, "200");
     }
 else if (strncmp(line, "CHANGE_PASS ", 12) == 0) {
     char id[64], oldp[64], newp[64];
 
     if (sscanf(line + 12, "%63s %63s %63s", id, oldp, newp) != 3) {
-        send_reply(sockfd, "ERROR Invalid format");
+        send_reply(sockfd, "203");
         continue;
     }
 
     Device *d = find_device(db, id);
     if (!d) {
-        send_reply(sockfd, "ERROR Not found");
+        send_reply(sockfd, "202");
         continue;
     }
 
     if (strcmp(d->auth.password, oldp) != 0) {
-        send_reply(sockfd, "ERROR Wrong password");
+        send_reply(sockfd, "201");
         continue;
     }
 
     strcpy(d->auth.password, newp);
     save_database(db);
-    send_reply(sockfd, "OK");
+    send_reply(sockfd, "200");
 }
 
         /* ---- Unknown command ---- */
