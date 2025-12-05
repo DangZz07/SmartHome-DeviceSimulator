@@ -303,6 +303,13 @@ int save_database(Database *db)
     return 1;
 }
 
+void generate_token(char *token, int len) {
+    const char *hex = "0123456789ABCDEF";
+    for (int i = 0; i < len; i++)
+        token[i] = hex[rand() % 16];
+    token[len] = '\0';
+}
+
 
 void trim_end(char *s) {
     int i = (int)strlen(s) - 1;
@@ -348,10 +355,11 @@ void handle_scan_struct(int sock, Database *db)
     send(sock, "MY DEVICES\r\n", 12, 0);
     for (int i = 0; i < db->deviceCount; i++) {
         if (db->devices[i].auth.connected) {
-            snprintf(out, sizeof(out), "%s\r\n", db->devices[i].deviceId);
+            snprintf(out, sizeof(out), "%s || %s || %s \r\n", db->devices[i].deviceId, db->devices[i].type, db->devices[i].name);
             send(sock, out, strlen(out), 0);
         }
     }
+    send(sock, " \r\n", 3, 0);
 
     send(sock, "NEW DEVICES\r\n", 13, 0);
     for (int i = 0; i < db->deviceCount; i++) {
@@ -403,29 +411,47 @@ void *client_thread(void *arg) {
         else if (strcmp(line, "SCAN") == 0) {
             handle_scan_struct(sockfd, db);
         }
-        else if (strncmp(line, "CONNECT ", 8) == 0) {
-
+               else if (strncmp(line, "CONNECT ", 8) == 0) { 
 
         if (sscanf(line + 8, "%63s %63s", id, pass) != 2) {
-            send_reply(sockfd, "203");
+            send_reply(sockfd, "203");   // invalid params
             continue;
         }
 
         Device *d = find_device(db, id);
         if (!d) {
-            send_reply(sockfd, "202");
+            send_reply(sockfd, "202");   // device not found
             continue;
         }
 
         if (strcmp(d->auth.password, pass) != 0) {
-            send_reply(sockfd, "201");
+            send_reply(sockfd, "201");   // wrong password
             continue;
         }
 
-        d->auth.connected = 1;
-        save_database(db);
-        send_reply(sockfd, "200");
-    }
+        // ---- Authentication success ----
+
+        // If no token → generate new
+        if (d->auth.token == NULL || strlen(d->auth.token) == 0) {
+            char newToken[32];
+            generate_token(newToken, 16);
+
+            strcpy(d->auth.token, newToken);
+            d->auth.connected = true;
+
+            save_database(db);     // Lưu DB với token mới
+        }
+
+        // reply format: 100 OK <device info> <token>
+        char reply[256];
+        snprintf(reply, sizeof(reply),
+            "200 %s %s",
+            d->deviceId,
+            d->auth.token
+        );
+
+        send_reply(sockfd, reply);
+        }
 else if (strncmp(line, "CHANGE_PASS ", 12) == 0) {
     char id[64], oldp[64], newp[64];
 

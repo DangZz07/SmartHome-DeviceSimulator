@@ -125,8 +125,16 @@ int main(int argc, char *argv[]) {
         send(sock, buffer, strlen(buffer), 0);
         send(sock, "\r\n", 2, 0);
 
-        if (strcasecmp(buffer, "SCAN") == 0) {
+        if (strcmp(buffer, "SCAN") == 0) {
             receive_scan_until_end(sock);
+            continue;
+        }
+        if ((strncmp(buffer, "CONNECT", 7)) == 0  ){
+            if (!receive_line(sock, buffer, sizeof(buffer))) {
+                printf("Connection closed by server.\n");
+                break;
+            }
+            printf("%s\n", buffer);
             continue;
         }
 
