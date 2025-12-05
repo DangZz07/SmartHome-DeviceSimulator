@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -15,7 +14,6 @@
 #define PORT 5550
 #define BACKLOG 20
 #define BUF_SIZE 1024
-
 
 typedef struct {
     double day;
@@ -81,6 +79,7 @@ typedef struct {
     int sockfd;
     Database *db;
 } ThreadArgs;
+
 
 
 int load_database(Database *db)
@@ -318,7 +317,52 @@ void trim_end(char *s) {
         i--;
     }
 }
+// ====== POWER DEVICE ======
+void handle_power_device(Database *db, const char *token, const char *action)
+{
+    for (int i = 0; i < db->deviceCount; i++)
+    {
+        Device *dev = &db->devices[i];
+        if (strcmp(dev->auth.token, token) == 0)
+        {
+            if (strcmp(action, "ON") == 0 || strcmp(action, "OFF") == 0)
+            {
+                strcpy(dev->state.power, action);
+            }
+            return;
+        }
+    }
+}
+// ====== TIMER DEVICE ======
 
+int handle_timer_device(Database *db, const char *token, const char *minuteStr, const char *action)
+{
+    int minutes = atoi(minuteStr);
+    if (minutes <= 0)
+        return 400; // invalid minute
+
+    for (int i = 0; i < db->deviceCount; i++)
+    {
+        Device *dev = &db->devices[i];
+        if (strcmp(dev->auth.token, token) == 0)
+        {
+            if (strcmp(dev->state.power, action) == 0)
+            {
+                return 221; // already set/cancel
+            }
+            if (strcmp(action, "ON") == 0 || strcmp(action, "OFF") == 0)
+            {
+                dev->state.timer = minutes;
+                return 200; // success
+            }
+            else
+            {
+                return 500; // invalid action
+            }
+        }
+    }
+    return 401; // invalid token
+}
 /* Safely receive one line (ending with '\n') */
 ssize_t recv_line(int sock, char *buf, size_t maxlen) {
     size_t n = 0;
@@ -475,10 +519,55 @@ else if (strncmp(line, "CHANGE_PASS ", 12) == 0) {
     save_database(db);
     send_reply(sockfd, "200");
 }
-
+        else if (strncmp(line, "POWER", 5) == 0)
+        {
+            char token[128];
+            char action[16];
+            if (sscanf(line, "POWER %127s %16s", token, action) == 2)
+            {
+                handle_power_device(db, token, action);
+                save_database(db);
+                send_reply(sockfd, "200");
+            }
+            else
+            {
+                send_reply(sockfd, "400"); // invalid format
+            }
+        }
+        else if (strncmp(line, "TIMER", 5) == 0)
+        {
+            char token[128];
+            char minuteStr[16];
+            char action[16];
+            if (sscanf(line, "TIMER %127s %15s %16s", token, minuteStr, action) == 3)
+            {
+                int res = handle_timer_device(db, token, minuteStr, action);
+                if (res == 200)
+                {
+                    save_database(db);
+                    send_reply(sockfd, "200");
+                }
+                else if (res == 400)
+                {
+                    send_reply(sockfd, "400"); // invalid minute
+                }
+                else if (res == 500)
+                {
+                    send_reply(sockfd, "500"); // bad request
+                }
+                else if (res == 401)
+                {
+                    send_reply(sockfd, "401"); // invalid token
+                }
+                else if (res == 221)
+                {
+                    send_reply(sockfd, "221"); // already set/cancel
+                }
+            }
+        }
         /* ---- Unknown command ---- */
         else {
-            send_reply(sockfd, "300"); /* unknown command */
+            send_reply(sockfd, "500"); /* unknown command */
         }
     }
 

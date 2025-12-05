@@ -4,13 +4,15 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include "cJSON.h"
 
-#define BUF_SIZE 2048
+#define BUF_SIZE 1024
+
 void interpret_response(const char *code) {
     if (strcmp(code, "100") == 0) 
         printf("→ CONNECTED TO SERVER\n");
     else if (strcmp(code, "200") == 0) 
-        printf("→ CONNECT OK\n");
+        printf("→ SUCCESS\n");
     else if (strcmp(code, "201") == 0) 
         printf("→ WRONG PASSWORD\n");
     else if (strcmp(code, "202") == 0) 
@@ -23,6 +25,24 @@ void interpret_response(const char *code) {
         printf("→ WRONG OLD PASSWORD\n");
     else if (strcmp(code, "300") == 0) 
         printf("→ UNKNOWN COMMAND\n");
+    else if (strcmp(code, "500") == 0)
+        printf("500. BAD_REQUEST\n");
+    else if (strcmp(code, "400") == 0)
+        printf("400. INVALID_VALUE.\n");
+    else if (strcmp(code, "401") == 0)
+        printf("401. INVALID TOKEN.\n");
+    else if (strcmp(code, "221") == 0)
+        printf("221. ALREADY SET/CANCEL.\n");
+}
+
+void print_pretty_infor_room(cJSON *root, const char *roomid)
+{
+    // Function removed - no longer used with unified database approach
+}
+
+void print_pretty_infor_home(cJSON *root)
+{
+    // Function removed - no longer used with unified database approach
 }
 // ============================ Read EXACT 1 LINE ============================
 int receive_line(int sock, char *buffer, size_t size) {
@@ -59,6 +79,21 @@ int receive_scan_until_end(int sock) {
 
     return 1;
 }
+int receive_message(int sock)
+{
+    char buffer[BUF_SIZE];
+    int len = recv(sock, buffer, BUF_SIZE - 1, 0);
+
+    if (len <= 0)
+        return 0;
+
+    buffer[len] = '\0';
+    buffer[strcspn(buffer, "\r\n")] = '\0';
+
+    interpret_response(buffer);
+
+    return 1;
+}
 
 // ============================ PRINT MENU ============================
 void print_menu() {
@@ -74,6 +109,12 @@ void print_menu() {
 
     printf("  CHANGE_PASS <deviceId> <oldPass> <newPass>\n");
     printf("     → Change device password\n\n");
+
+    printf("  POWER <token> <ON|OFF>\n");
+    printf("     → Control device power\n\n");
+
+    printf("  TIMER <token> <minutes> <ON|OFF>\n");
+    printf("     → Set device timer\n\n");
 
     printf("==================================\n");
 }
