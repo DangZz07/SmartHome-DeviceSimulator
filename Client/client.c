@@ -4,7 +4,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
-#include "cJSON.h"
+#include <cjson/cJSON.h>
 
 #define BUF_SIZE 1024
 
@@ -79,6 +79,7 @@ int receive_scan_until_end(int sock) {
 
     return 1;
 }
+
 int receive_message(int sock)
 {
     char buffer[BUF_SIZE];
@@ -178,7 +179,11 @@ int main(int argc, char *argv[]) {
             printf("%s\n", buffer);
             continue;
         }
-
+        if ((strncmp(buffer, "SHOW HOME", 9)) == 0  ||
+            (strncmp(buffer, "SHOW ROOM", 9)) == 0 ) {
+            receive_scan_until_end(sock);
+            continue;
+        }
         if (receive_line(sock, buffer, sizeof(buffer))) {
             interpret_response(buffer);
         } else {
