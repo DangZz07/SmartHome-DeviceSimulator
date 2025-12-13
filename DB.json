@@ -12,7 +12,7 @@
 			"type":	"light",
 			"name":	"living room light",
 			"auth":	{
-				"password":	"123456",
+				"password":	"123",
 				"connected":	true,
 				"Token":	"TKN_9876"
 			},
