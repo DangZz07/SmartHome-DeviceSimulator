@@ -4,7 +4,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
-#include <cjson/cJSON.h>
+#include <cJSON.h>
 
 #define BUF_SIZE 1024
 
@@ -35,33 +35,69 @@ void interpret_response(const char *code) {
         printf("221. ALREADY SET/CANCEL.\n");
 }
 
-void print_pretty_infor_room(cJSON *root, const char *roomid)
-{
-    // Function removed - no longer used with unified database approach
-}
 
-void print_pretty_infor_home(cJSON *root)
-{
-    // Function removed - no longer used with unified database approach
-}
-// ============================ Read EXACT 1 LINE ============================
+static char recvbuf[4096];     // buffer nhận tạm - STATIC để giữ dữ liệu giữa các lần gọi
+static int recv_len = 0;       // số byte hiện có trong recvbuf - STATIC
+
 int receive_line(int sock, char *buffer, size_t size) {
-    size_t idx = 0;
-    char c;
+    int i;
 
-    while (idx < size - 1) {
-        int n = recv(sock, &c, 1, 0);
-        if (n <= 0) return 0;
+    while (1) {
 
-        if (c == '\n') break;   // end of line
-        if (c == '\r') continue; // skip CR
+        // 1) Tìm chuỗi '\r\n' (CRLF) trong recvbuf
+        // Lặp đến recv_len - 1 vì cần 2 byte để tìm '\r' và '\n'
+        for (i = 0; i < recv_len - 1; i++) { 
+            // Điều kiện tìm thấy CRLF
+            if (recvbuf[i] == '\r' && recvbuf[i+1] == '\n') {
 
-        buffer[idx++] = c;
+                // Độ dài của dòng là từ đầu đến '\r' (không bao gồm '\r\n')
+                int linelen = i; 
+                int total_extracted_len = linelen + 2; // Độ dài dòng + \r\n
+
+                // Nếu dòng (không kể \r\n) dài quá size → cắt
+                if (linelen >= size) {
+                    linelen = size - 1; 
+                }
+                
+                // Copy ra buffer (kết quả) (chỉ copy đến trước \r\n)
+                memcpy(buffer, recvbuf, linelen);
+                buffer[linelen] = '\0'; // Kết thúc chuỗi
+
+                // dời phần còn lại lên đầu recvbuf
+                // Bắt đầu dời từ sau '\n' (tức là recvbuf + i + 2)
+                memmove(recvbuf, recvbuf + total_extracted_len, recv_len - total_extracted_len);
+                recv_len -= total_extracted_len;
+
+                return linelen;// trả về số byte của dòng
+            }
+        }
+
+        // 2) Nếu chưa thấy '\r\n', nhận thêm dữ liệu
+        int n = recv(sock, recvbuf + recv_len, sizeof(recvbuf) - recv_len, 0);
+        if (n <= 0)
+            return 0;// mất kết nối hoặc lỗi
+
+        recv_len += n;
+
+        // 3) Nếu recvbuf đầy mà vẫn không có '\r\n' (xử lý dòng quá dài hoặc không có dấu phân cách)
+        // Trong giao thức CRLF, lỗi này ít phổ biến hơn và thường được coi là lỗi giao thức.
+        if (recv_len >= sizeof(recvbuf)) {
+            // Xử lý bằng cách cắt một phần (size - 1) để trả về
+            int linelen = size - 1;
+            memcpy(buffer, recvbuf, linelen);
+            buffer[linelen] = '\0';
+            
+            // Dời phần còn lại (nếu có) lên đầu.
+            // Nếu linelen < recv_len, vẫn còn dữ liệu
+            int remaining = recv_len - linelen;
+            memmove(recvbuf, recvbuf + linelen, remaining);
+            recv_len = remaining;
+            
+            return linelen;
+        }
     }
-
-    buffer[idx] = '\0';
-    return 1;
 }
+
 
 // ============================ SCAN MULTI-LINE ============================
 int receive_scan_until_end(int sock) {
@@ -80,21 +116,6 @@ int receive_scan_until_end(int sock) {
     return 1;
 }
 
-int receive_message(int sock)
-{
-    char buffer[BUF_SIZE];
-    int len = recv(sock, buffer, BUF_SIZE - 1, 0);
-
-    if (len <= 0)
-        return 0;
-
-    buffer[len] = '\0';
-    buffer[strcspn(buffer, "\r\n")] = '\0';
-
-    interpret_response(buffer);
-
-    return 1;
-}
 
 // ============================ PRINT MENU ============================
 void print_menu() {
