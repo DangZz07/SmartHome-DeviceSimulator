@@ -17,7 +17,7 @@
 				"Token":	"76931FAC9DAB2B3"
 			},
 			"state":	{
-				"power":	"ON",
+				"power":	"OFF",
 				"timer":	0,
 				"speed":	null,
 				"mode":	null,
@@ -85,7 +85,7 @@
 				}
 			},
 			"logs":	[]
-		},{
+		}, {
 			"deviceId":	"DEV_004",
 			"type":	"light",
 			"name":	"super light",
@@ -110,6 +110,5 @@
 				}
 			},
 			"logs":	[]
-		}
-	]
+		}]
 }

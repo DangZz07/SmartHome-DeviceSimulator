@@ -7,6 +7,32 @@
 
 #define BUF_SIZE 1024
 
+
+/* ================= SCREEN STATE ================= */
+typedef enum {
+    SCREEN_HOME,
+    SCREEN_SCAN,
+    SCREEN_DEVICE,
+    SCREEN_EXIT
+} Screen;
+
+Screen current_screen = SCREEN_HOME;
+
+/* ===== DEVICE STATE ===== */
+char current_device_id[64] = "";
+char current_token[64] = "";
+int device_connected = 0;
+
+
+/* ===== SCAN TOKEN CACHE ===== */
+typedef struct {
+    char id[64];
+    char token[64];
+} DeviceToken;
+
+DeviceToken scan_tokens[64];
+int scan_token_count = 0;
+
 /* ================= RESPONSE CODE ================= */
 void interpret_response(const char *code) {
     if (strcmp(code, "100") == 0) printf("→ CONNECTED TO SERVER\n");
@@ -62,20 +88,69 @@ int receive_scan_until_end(int sock) {
     return 1;
 }
 
-/* ================= SCREEN STATE ================= */
-typedef enum {
-    SCREEN_HOME,
-    SCREEN_SCAN,
-    SCREEN_DEVICE,
-    SCREEN_EXIT
-} Screen;
+int receive_scan_until_end2(int sock) {
+    char line[BUF_SIZE];
+    int in_my = 0;
 
-Screen current_screen = SCREEN_HOME;
+    scan_token_count = 0; // reset mỗi lần scan
 
-/* ===== DEVICE STATE ===== */
-char current_device_id[64] = "";
-char current_token[64] = "";
-int device_connected = 0;
+    while (1) {
+        if (!receive_line(sock, line, sizeof(line)))
+            return 0;
+
+        if (strcmp(line, "MY DEVICES") == 0) {
+            in_my = 1;
+            printf("MY DEVICES\n");
+            continue;
+        }
+
+        if (strcmp(line, "NEW DEVICES") == 0) {
+            in_my = 0;
+            printf("NEW DEVICES\n");
+            continue;
+        }
+
+        if (strcmp(line, "END") == 0) {
+            printf("END\n");
+            break;
+        }
+
+        if (in_my) {
+            char id[64], type[32], name[128], token[64];
+
+            if (sscanf(line,
+                       "%63s || %31s || %127[^|] || %63s",
+                       id, type, name, token) == 4) {
+
+                // lưu token
+                strcpy(scan_tokens[scan_token_count].id, id);
+                strcpy(scan_tokens[scan_token_count].token, token);
+                scan_token_count++;
+
+                // in KHÔNG token
+                printf("%s || %s || %s\n", id, type, name);
+            }
+        } else {
+            // NEW DEVICE
+            printf("%s\n", line);
+        }
+    }
+    return 1;
+}
+
+
+
+
+
+
+char *find_scan_token(const char *id) {
+    for (int i = 0; i < scan_token_count; i++) {
+        if (strcmp(scan_tokens[i].id, id) == 0)
+            return scan_tokens[i].token;
+    }
+    return NULL;
+}
+
 
 /* ================= HOME ================= */
 void show_home_menu() {
@@ -119,7 +194,7 @@ void handle_home(int sock) {
 void show_scan(int sock) {
     printf("\n========== SCAN ==========\n");
     send(sock, "SCAN\r\n", 6, 0);
-    receive_scan_until_end(sock);
+    receive_scan_until_end2(sock);
     printf("\nEnter device ID (or 0 to back): ");
 }
 
@@ -134,11 +209,21 @@ void handle_scan() {
     }
 
     strcpy(current_device_id, id);
-    current_token[0] = '\0';
-    device_connected = 0;
+
+    char *tk = find_scan_token(id);
+    if (tk) {
+        // MY DEVICE
+        strcpy(current_token, tk);
+        device_connected = 1;
+    } else {
+        // NEW DEVICE
+        current_token[0] = '\0';
+        device_connected = 0;
+    }
 
     current_screen = SCREEN_DEVICE;
 }
+
 
 /* ================= DEVICE MENU ================= */
 void show_device_menu() {
