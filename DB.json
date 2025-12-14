@@ -12,12 +12,12 @@
 			"type":	"light",
 			"name":	"living room light",
 			"auth":	{
-				"password":	"123",
+				"password":	"1",
 				"connected":	true,
-				"Token":	"TKN_9876"
+				"Token":	"76931FAC9DAB2B3"
 			},
 			"state":	{
-				"power":	"OFF",
+				"power":	"ON",
 				"timer":	0,
 				"speed":	null,
 				"mode":	null,
@@ -40,12 +40,12 @@
 			"type":	"fan",
 			"name":	"living room fan",
 			"auth":	{
-				"password":	"abc123",
+				"password":	"3",
 				"connected":	true,
-				"Token":	"76931FAC9DAB2B36"
+				"Token":	"76931FAC9DAB2B6"
 			},
 			"state":	{
-				"power":	"ON",
+				"power":	"OFF",
 				"timer":	0,
 				"speed":	3,
 				"mode":	null,
@@ -85,5 +85,31 @@
 				}
 			},
 			"logs":	[]
-		}]
+		},{
+			"deviceId":	"DEV_004",
+			"type":	"light",
+			"name":	"super light",
+			"auth":	{
+				"password":	"abc123",
+				"connected":	false,
+				"Token":	""
+			},
+			"state":	{
+				"power":	"OFF",
+				"timer":	0,
+				"speed":	null,
+				"mode":	null,
+				"temperature":	null
+			},
+			"powerUsage":	{
+				"currentWatt":	45,
+				"usageHistory":	{
+					"day":	2.3,
+					"month":	40.1,
+					"year":	410
+				}
+			},
+			"logs":	[]
+		}
+	]
 }
