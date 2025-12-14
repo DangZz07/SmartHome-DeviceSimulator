@@ -45,9 +45,9 @@
 				"Token":	"76931FAC9DAB2B6"
 			},
 			"state":	{
-				"power":	"OFF",
+				"power":	"ON",
 				"timer":	0,
-				"speed":	3,
+				"speed":	2,
 				"mode":	null,
 				"temperature":	null
 			},
