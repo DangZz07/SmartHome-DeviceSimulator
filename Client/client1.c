@@ -4,212 +4,275 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
-#include <cJSON.h>
 
 #define BUF_SIZE 1024
 
+/* ================= RESPONSE CODE ================= */
 void interpret_response(const char *code) {
-    if (strcmp(code, "100") == 0) 
-        printf("→ CONNECTED TO SERVER\n");
-    else if (strcmp(code, "200") == 0) 
-        printf("→ SUCCESS\n");
-    else if (strcmp(code, "201") == 0) 
-        printf("→ WRONG PASSWORD\n");
-    else if (strcmp(code, "202") == 0) 
-        printf("→ DEVICE NOT FOUND\n");
-    else if (strcmp(code, "203") == 0) 
-        printf("→ INVALID FORMAT\n");
-    else if (strcmp(code, "210") == 0) 
-        printf("→ PASSWORD CHANGED OK\n");
-    else if (strcmp(code, "211") == 0) 
-        printf("→ WRONG OLD PASSWORD\n");
-    else if (strcmp(code, "300") == 0) 
-        printf("→ UNKNOWN COMMAND\n");
-    else if (strcmp(code, "500") == 0)
-        printf("500. BAD_REQUEST\n");
-    else if (strcmp(code, "400") == 0)
-        printf("400. INVALID_VALUE.\n");
-    else if (strcmp(code, "401") == 0)
-        printf("401. INVALID TOKEN.\n");
-    else if (strcmp(code, "221") == 0)
-        printf("221. ALREADY SET/CANCEL.\n");
+    if (strcmp(code, "100") == 0) printf("→ CONNECTED TO SERVER\n");
+    else if (strcmp(code, "200") == 0) printf("→ SUCCESS\n");
+    else if (strcmp(code, "201") == 0) printf("→ WRONG PASSWORD\n");
+    else if (strcmp(code, "202") == 0) printf("→ DEVICE NOT FOUND\n");
+    else if (strcmp(code, "203") == 0) printf("→ INVALID FORMAT\n");
+    else if (strcmp(code, "210") == 0) printf("→ PASSWORD CHANGED OK\n");
+    else if (strcmp(code, "211") == 0) printf("→ WRONG OLD PASSWORD\n");
+    else if (strcmp(code, "300") == 0) printf("→ UNKNOWN COMMAND\n");
+    else if (strcmp(code, "500") == 0) printf("500. BAD_REQUEST\n");
+    else if (strcmp(code, "400") == 0) printf("400. INVALID_VALUE\n");
+    else if (strcmp(code, "401") == 0) printf("401. INVALID TOKEN\n");
+    else if (strcmp(code, "221") == 0) printf("221. ALREADY SET/CANCEL\n");
 }
 
-
-static char recvbuf[4096];     // buffer nhận tạm - STATIC để giữ dữ liệu giữa các lần gọi
-static int recv_len = 0;       // số byte hiện có trong recvbuf - STATIC
+/* ================= RECEIVE LINE (CRLF SAFE) ================= */
+static char recvbuf[4096];
+static int recv_len = 0;
 
 int receive_line(int sock, char *buffer, size_t size) {
-    int i;
-
     while (1) {
+        for (int i = 0; i < recv_len - 1; i++) {
+            if (recvbuf[i] == '\r' && recvbuf[i + 1] == '\n') {
+                int len = i;
+                if (len >= size) len = size - 1;
+                memcpy(buffer, recvbuf, len);
+                buffer[len] = '\0';
 
-        // 1) Tìm chuỗi '\r\n' (CRLF) trong recvbuf
-        // Lặp đến recv_len - 1 vì cần 2 byte để tìm '\r' và '\n'
-        for (i = 0; i < recv_len - 1; i++) { 
-            // Điều kiện tìm thấy CRLF
-            if (recvbuf[i] == '\r' && recvbuf[i+1] == '\n') {
-
-                // Độ dài của dòng là từ đầu đến '\r' (không bao gồm '\r\n')
-                int linelen = i; 
-                int total_extracted_len = linelen + 2; // Độ dài dòng + \r\n
-
-                // Nếu dòng (không kể \r\n) dài quá size → cắt
-                if (linelen >= size) {
-                    linelen = size - 1; 
-                }
-                
-                // Copy ra buffer (kết quả) (chỉ copy đến trước \r\n)
-                memcpy(buffer, recvbuf, linelen);
-                buffer[linelen] = '\0'; // Kết thúc chuỗi
-
-                // dời phần còn lại lên đầu recvbuf
-                // Bắt đầu dời từ sau '\n' (tức là recvbuf + i + 2)
-                memmove(recvbuf, recvbuf + total_extracted_len, recv_len - total_extracted_len);
-                recv_len -= total_extracted_len;
-
-                return linelen;// trả về số byte của dòng
+                memmove(recvbuf, recvbuf + i + 2, recv_len - (i + 2));
+                recv_len -= (i + 2);
+                return len;
             }
         }
 
-        // 2) Nếu chưa thấy '\r\n', nhận thêm dữ liệu
-        int n = recv(sock, recvbuf + recv_len, sizeof(recvbuf) - recv_len, 0);
-        if (n <= 0)
-            return 0;// mất kết nối hoặc lỗi
-
+        int n = recv(sock, recvbuf + recv_len,
+                     sizeof(recvbuf) - recv_len, 0);
+        if (n <= 0) return 0;
         recv_len += n;
-
-        // 3) Nếu recvbuf đầy mà vẫn không có '\r\n' (xử lý dòng quá dài hoặc không có dấu phân cách)
-        // Trong giao thức CRLF, lỗi này ít phổ biến hơn và thường được coi là lỗi giao thức.
-        if (recv_len >= sizeof(recvbuf)) {
-            // Xử lý bằng cách cắt một phần (size - 1) để trả về
-            int linelen = size - 1;
-            memcpy(buffer, recvbuf, linelen);
-            buffer[linelen] = '\0';
-            
-            // Dời phần còn lại (nếu có) lên đầu.
-            // Nếu linelen < recv_len, vẫn còn dữ liệu
-            int remaining = recv_len - linelen;
-            memmove(recvbuf, recvbuf + linelen, remaining);
-            recv_len = remaining;
-            
-            return linelen;
-        }
     }
 }
 
-
-// ============================ SCAN MULTI-LINE ============================
+/* ================= SCAN MULTI LINE ================= */
 int receive_scan_until_end(int sock) {
-    char buffer[BUF_SIZE];
-
+    char line[BUF_SIZE];
     while (1) {
-        if (!receive_line(sock, buffer, sizeof(buffer)))
+        if (!receive_line(sock, line, sizeof(line)))
             return 0;
-
-        printf("%s\n", buffer);
-
-        if (strcmp(buffer, "END") == 0)
+        printf("%s\n", line);
+        if (strcmp(line, "END") == 0)
             break;
     }
-
     return 1;
 }
 
+/* ================= SCREEN STATE ================= */
+typedef enum {
+    SCREEN_HOME,
+    SCREEN_SCAN,
+    SCREEN_DEVICE,
+    SCREEN_EXIT
+} Screen;
 
-// ============================ PRINT MENU ============================
-void print_menu() {
-    printf("\n==================================\n");
-    printf("         SMART HOME CLIENT        \n");
-    printf("==================================\n");
-    printf("Available commands:\n");
-    printf("  SCAN\n");
-    printf("     → Scan all devices\n\n");
+Screen current_screen = SCREEN_HOME;
 
-    printf("  CONNECT <deviceId> <password>\n");
-    printf("     → Connect to a device\n\n");
+/* ===== DEVICE STATE ===== */
+char current_device_id[64] = "";
+char current_token[64] = "";
+int device_connected = 0;
 
-    printf("  CHANGE_PASS <deviceId> <oldPass> <newPass>\n");
-    printf("     → Change device password\n\n");
-
-    printf("  POWER <token> <ON|OFF>\n");
-    printf("     → Control device power\n\n");
-
-    printf("  TIMER <token> <minutes> <ON|OFF>\n");
-    printf("     → Set device timer\n\n");
-
-    printf("==================================\n");
+/* ================= HOME ================= */
+void show_home_menu() {
+    printf("\n========== HOME ==========\n");
+    printf("1. Show Home\n");
+    printf("2. Show Room\n");
+    printf("3. Scan Devices\n");
+    printf("0. Exit\n");
+    printf("==========================\n");
+    printf("Choose: ");
 }
 
-int main(int argc, char *argv[]) {
+void handle_home(int sock) {
+    char c[8];
+    fgets(c, sizeof(c), stdin);
 
+    if (c[0] == '1') {
+        send(sock, "SHOW HOME\r\n", 11, 0);
+        receive_scan_until_end(sock);
+    }
+    else if (c[0] == '2') {
+        char room[64], cmd[128];
+        printf("Enter Room ID: ");
+        fgets(room, sizeof(room), stdin);
+        room[strcspn(room, "\n")] = 0;
+
+        snprintf(cmd, sizeof(cmd),
+                 "SHOW ROOM %s\r\n", room);
+        send(sock, cmd, strlen(cmd), 0);
+        receive_scan_until_end(sock);
+    }
+    else if (c[0] == '3') {
+        current_screen = SCREEN_SCAN;
+    }
+    else if (c[0] == '0') {
+        current_screen = SCREEN_EXIT;
+    }
+}
+
+/* ================= SCAN ================= */
+void show_scan(int sock) {
+    printf("\n========== SCAN ==========\n");
+    send(sock, "SCAN\r\n", 6, 0);
+    receive_scan_until_end(sock);
+    printf("\nEnter device ID (or 0 to back): ");
+}
+
+void handle_scan() {
+    char id[64];
+    fgets(id, sizeof(id), stdin);
+    id[strcspn(id, "\n")] = 0;
+
+    if (strcmp(id, "0") == 0) {
+        current_screen = SCREEN_HOME;
+        return;
+    }
+
+    strcpy(current_device_id, id);
+    current_token[0] = '\0';
+    device_connected = 0;
+
+    current_screen = SCREEN_DEVICE;
+}
+
+/* ================= DEVICE MENU ================= */
+void show_device_menu() {
+    printf("\n====== DEVICE ======\n");
+    printf("Device: %s\n", current_device_id);
+
+    if (!device_connected) {
+        printf("1. Connect\n");
+    } else {
+        printf("2. Power\n");
+        printf("3. Change Password\n");
+    }
+
+    printf("0. Back\n");
+    printf("====================\n");
+    printf("Choose: ");
+}
+
+/* ================= CONNECT ================= */
+void handle_connect(int sock) {
+    char pass[64], cmd[256], line[BUF_SIZE];
+
+    printf("Enter password: ");
+    fgets(pass, sizeof(pass), stdin);
+    pass[strcspn(pass, "\n")] = 0;
+
+    snprintf(cmd, sizeof(cmd),
+             "CONNECT %s %s\r\n",
+             current_device_id, pass);
+
+    send(sock, cmd, strlen(cmd), 0);
+
+    receive_line(sock, line, sizeof(line));
+    printf("%s\n", line);
+
+    if (strncmp(line, "200", 3) == 0) {
+        sscanf(line, "200 %*s %63s", current_token);
+        device_connected = 1;
+    }
+}
+
+/* ================= POWER ================= */
+void handle_power(int sock) {
+    if (!device_connected) {
+        printf("Device not connected!\n");
+        return;
+    }
+
+    char c[8], cmd[128], line[BUF_SIZE];
+    printf("1. ON\n2. OFF\nChoose: ");
+    fgets(c, sizeof(c), stdin);
+
+    snprintf(cmd, sizeof(cmd),
+             "POWER %s %s\r\n",
+             current_token,
+             (c[0] == '1') ? "ON" : "OFF");
+
+    send(sock, cmd, strlen(cmd), 0);
+    receive_line(sock, line, sizeof(line));
+    interpret_response(line);
+}
+
+/* ================= CHANGE PASSWORD ================= */
+void handle_change_password(int sock) {
+    char newpass[64], cmd[256], line[BUF_SIZE];
+
+    printf("Enter new password: ");
+    fgets(newpass, sizeof(newpass), stdin);
+    newpass[strcspn(newpass, "\n")] = 0;
+
+    snprintf(cmd, sizeof(cmd),
+             "PASS %s %s\r\n",
+             current_token, newpass);
+
+    send(sock, cmd, strlen(cmd), 0);
+    receive_line(sock, line, sizeof(line));
+    interpret_response(line);
+
+    /* logout local */
+    current_token[0] = '\0';
+    device_connected = 0;
+}
+
+/* ================= MAIN ================= */
+int main(int argc, char *argv[]) {
     if (argc != 3) {
         printf("Usage: %s <server_ip> <port>\n", argv[0]);
         return 1;
     }
 
-    int sock;
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
     struct sockaddr_in server;
-    char buffer[BUF_SIZE];
-
-    sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0) {
-        perror("socket failed");
-        exit(1);
-    }
 
     server.sin_family = AF_INET;
     server.sin_port = htons(atoi(argv[2]));
     inet_pton(AF_INET, argv[1], &server.sin_addr);
 
-    if (connect(sock, (struct sockaddr *)&server, sizeof(server)) < 0) {
-        perror("connect failed");
-        return 1;
-    }
+    connect(sock, (struct sockaddr *)&server, sizeof(server));
 
-    printf(" Connected to server %s:%s\n", argv[1], argv[2]);
+    char greet[BUF_SIZE];
+    receive_line(sock, greet, sizeof(greet));
+    printf("Server: %s\n", greet);
 
-    // Greeting
-    if (receive_line(sock, buffer, sizeof(buffer)))
-        printf(" Server: %s\n", buffer);
+    while (current_screen != SCREEN_EXIT) {
+        switch (current_screen) {
 
-    // ================= MAIN LOOP =================
-    while (1) {
-
-        print_menu();
-        printf(" Enter command: ");
-        fflush(stdout);
-
-        if (!fgets(buffer, sizeof(buffer), stdin))
+        case SCREEN_HOME:
+            show_home_menu();
+            handle_home(sock);
             break;
 
-        buffer[strcspn(buffer, "\n")] = '\0';
+        case SCREEN_SCAN:
+            show_scan(sock);
+            handle_scan();
+            break;
 
-        send(sock, buffer, strlen(buffer), 0);
-        send(sock, "\r\n", 2, 0);
+        case SCREEN_DEVICE: {
+            show_device_menu();
+            char c[8];
+            fgets(c, sizeof(c), stdin);
 
-        if (strcmp(buffer, "SCAN") == 0) {
-            receive_scan_until_end(sock);
-            continue;
-        }
-        if ((strncmp(buffer, "CONNECT", 7)) == 0  ){
-            if (!receive_line(sock, buffer, sizeof(buffer))) {
-                printf("Connection closed by server.\n");
-                break;
+            if (!device_connected) {
+                if (c[0] == '1') handle_connect(sock);
+                else if (c[0] == '0') current_screen = SCREEN_HOME;
+            } else {
+                if (c[0] == '2') handle_power(sock);
+                else if (c[0] == '3') handle_change_password(sock);
+                else if (c[0] == '0') current_screen = SCREEN_HOME;
             }
-            printf("%s\n", buffer);
-            continue;
-        }
-        if ((strncmp(buffer, "SHOW HOME", 9)) == 0  ||
-            (strncmp(buffer, "SHOW ROOM", 9)) == 0 ) {
-            receive_scan_until_end(sock);
-            continue;
-        }
-        if (receive_line(sock, buffer, sizeof(buffer))) {
-            interpret_response(buffer);
-        } else {
-            printf("Connection closed by server.\n");
             break;
+        }
+
+        default:
+            current_screen = SCREEN_HOME;
         }
     }
 

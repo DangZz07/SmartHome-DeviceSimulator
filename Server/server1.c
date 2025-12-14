@@ -418,7 +418,7 @@ void handle_show_home(Database *db, int sock)
 // ====== SHOW ROOM ======
 void handle_show_room(Database *db, const char *roomId, int sock)
 {
-    char out[256];
+    char out[512];
 
     for (int i = 0; i < db->roomCount; i++)
     {
@@ -594,18 +594,17 @@ void send_reply(int sock, const char *code)
 }
 void handle_scan_struct(int sock, Database *db)
 {
-    char out[256];
+    char out[512];
 
     send(sock, "MY DEVICES\r\n", 12, 0);
     for (int i = 0; i < db->deviceCount; i++)
     {
         if (db->devices[i].auth.connected)
         {
-            snprintf(out, sizeof(out), "%s || %s || %s \r\n", db->devices[i].deviceId, db->devices[i].type, db->devices[i].name);
+            snprintf(out, sizeof(out), "%s || %s || %s || %s \r\n", db->devices[i].deviceId, db->devices[i].type, db->devices[i].name, db->devices[i].auth.token    );
             send(sock, out, strlen(out), 0);
         }
     }
-    send(sock, " \r\n", 3, 0);
 
     send(sock, "NEW DEVICES\r\n", 13, 0);
     for (int i = 0; i < db->deviceCount; i++)
@@ -687,7 +686,7 @@ void handle_connect(int sockfd, Database *db, const char *line) {
 void handle_pass(int sockfd, Database *db, const char *line) {
     char token[64], oldp[64], newp[64];
 
-    if (sscanf(line + 5, "%63s %63s %63s", token, oldp, newp) != 3) {
+    if (sscanf(line + 5, "%63s %63s", token, newp) != 2) {
         send_reply(sockfd, "203"); // invalid params
         return;
     }
@@ -700,12 +699,6 @@ void handle_pass(int sockfd, Database *db, const char *line) {
         return;
     }
 
-    // Verify old password
-    if (strcmp(d->auth.password, oldp) != 0) {
-        send_reply(sockfd, "211"); // wrong old password
-        pthread_mutex_unlock(&db_mutex);
-        return;
-    }
 
     // ---- Authentication success ----
 
@@ -840,6 +833,7 @@ int main(int argc, char *argv[])
     int port = PORT;
     if (argc == 2)
         port = atoi(argv[1]);
+    srand(time(NULL));
 
     Database db;
     if (!load_database(&db))
