@@ -3,21 +3,21 @@
 		"homeName":	"My Home",
 		"rooms":	[{
 				"roomId":	"ROOM_01",
-				"roomName":	"Living Room",
+				"roomName":	"Living_Room",
 				"devices":	["DEV_001", "DEV_002"]
 			}]
 	},
 	"devices":	[{
 			"deviceId":	"DEV_001",
 			"type":	"light",
-			"name":	"living room light",
+			"name":	"living_room_light",
 			"auth":	{
 				"password":	"1",
 				"connected":	true,
 				"Token":	"76931FAC9DAB2B3"
 			},
 			"state":	{
-				"power":	"OFF",
+				"power":	"ON",
 				"timer":	0,
 				"speed":	null,
 				"mode":	null,
@@ -38,7 +38,7 @@
 		}, {
 			"deviceId":	"DEV_002",
 			"type":	"fan",
-			"name":	"living room fan",
+			"name":	"living_room_fan",
 			"auth":	{
 				"password":	"3",
 				"connected":	true,
@@ -63,7 +63,7 @@
 		}, {
 			"deviceId":	"DEV_003",
 			"type":	"fan",
-			"name":	"bedroom fan",
+			"name":	"bedroom_fan",
 			"auth":	{
 				"password":	"abc123",
 				"connected":	true,
@@ -88,7 +88,7 @@
 		}, {
 			"deviceId":	"DEV_004",
 			"type":	"light",
-			"name":	"super light",
+			"name":	"super_light",
 			"auth":	{
 				"password":	"abc123",
 				"connected":	false,

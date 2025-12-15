@@ -877,19 +877,16 @@ int main(int argc, char *argv[])
         perror("listen error");
         exit(EXIT_FAILURE);
     }
-
     printf("Server started on port %d.\n", port);
 
     while (1)
     {
-
         int clientSock = accept(listenfd, (struct sockaddr *)&client_addr, &sin_size);
         if (clientSock == -1)
         {
             perror("accept error");
             continue;
         }
-
         char client_ip[INET_ADDRSTRLEN];
         inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, INET_ADDRSTRLEN);
         int client_port = ntohs(client_addr.sin_port);
@@ -902,7 +899,6 @@ int main(int argc, char *argv[])
 
         pthread_create(&tid, NULL, client_thread, args);
     }
-
     close(listenfd);
     return 0;
 }

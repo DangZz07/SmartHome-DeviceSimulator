@@ -119,7 +119,7 @@ int receive_scan_until_end2(int sock) {
             char id[64], type[32], name[128], token[64];
 
             if (sscanf(line,
-                       "%63s || %31s || %127[^|] || %63s",
+                       "%63s || %31s || %127s || %63s",
                        id, type, name, token) == 4) {
 
                 // lưu token
