@@ -83,13 +83,11 @@ typedef struct
     int deviceCount;
 } Database;
 
-
-typedef struct {
+typedef struct
+{
     char internal_buf[4096];
     size_t internal_len;
 } RecvContext;
-
-
 
 typedef struct
 {
@@ -474,6 +472,39 @@ void handle_power_device(Database *db, const char *token, const char *action)
 
     pthread_mutex_unlock(&db_mutex);
 }
+// ====== SPEED DEVICE ======
+int handle_speed_device(Database *db, const char *token, int speed)
+{
+    pthread_mutex_lock(&db_mutex);
+
+    for (int i = 0; i < db->deviceCount; i++)
+    {
+        Device *dev = &db->devices[i];
+        if (strcmp(dev->auth.token, token) == 0)
+        {
+            if (dev->state.speed == -1)
+            {
+                pthread_mutex_unlock(&db_mutex);
+                return 405; // device not support speed
+            }
+            else if (speed < 0 || speed > 3)
+            {
+                pthread_mutex_unlock(&db_mutex);
+                return 400; // invalid speed
+            }
+            else if (strcmp(dev->state.power, "OFF") == 0)
+            {
+                pthread_mutex_unlock(&db_mutex);
+                return 502; // device is off
+            }
+            dev->state.speed = speed;
+            pthread_mutex_unlock(&db_mutex);
+            return 200; // success
+        }
+    }
+
+    pthread_mutex_unlock(&db_mutex);
+}
 // ====== TIMER DEVICE ======
 
 int handle_timer_device(Database *db, const char *token, const char *minuteStr, const char *action)
@@ -516,52 +547,55 @@ ssize_t recv_line(int sock, RecvContext *ctx, char *buf, size_t maxlen)
 {
     while (1)
     {
-        if(ctx->internal_len >= 2)
+        if (ctx->internal_len >= 2)
         {
-        // 1) Tìm chuỗi '\r\n' (CRLF) trong internal buffer
-        // Lặp đến internal_len - 1 vì cần 2 byte để kiểm tra '\r' và '\n'
-        for (size_t i = 0; i + 1 < ctx->internal_len; ++i)
-        {   
-
-            // Điều kiện tìm thấy CRLF
-            if (ctx->internal_buf[i] == '\r' && ctx->internal_buf[i+1] == '\n')
+            // 1) Tìm chuỗi '\r\n' (CRLF) trong internal buffer
+            // Lặp đến internal_len - 1 vì cần 2 byte để kiểm tra '\r' và '\n'
+            for (size_t i = 0; i + 1 < ctx->internal_len; ++i)
             {
-                // Độ dài của dòng là từ đầu đến '\r' (không bao gồm '\r\n')
-                size_t linelen = i;
-                size_t total_extracted_len = linelen + 2; // Độ dài dòng + \r\n
 
-                // Kích thước tối đa có thể copy vào buf là maxlen - 1
-                size_t copy_len = linelen < maxlen - 1 ? linelen : maxlen - 1;
+                // Điều kiện tìm thấy CRLF
+                if (ctx->internal_buf[i] == '\r' && ctx->internal_buf[i + 1] == '\n')
+                {
+                    // Độ dài của dòng là từ đầu đến '\r' (không bao gồm '\r\n')
+                    size_t linelen = i;
+                    size_t total_extracted_len = linelen + 2; // Độ dài dòng + \r\n
 
-                // Copy dòng ra buffer (kết quả) (chỉ copy đến trước \r\n)
-                memcpy(buf, ctx->internal_buf, copy_len);
-                buf[copy_len] = '\0'; // Kết thúc chuỗi
+                    // Kích thước tối đa có thể copy vào buf là maxlen - 1
+                    size_t copy_len = linelen < maxlen - 1 ? linelen : maxlen - 1;
 
-                // Dời phần còn lại lên đầu internal_buf, bắt đầu từ sau '\n'
-                size_t remain = ctx->internal_len - total_extracted_len;
-                memmove(ctx->internal_buf, ctx->internal_buf + total_extracted_len, remain);
-                ctx->internal_len = remain;
+                    // Copy dòng ra buffer (kết quả) (chỉ copy đến trước \r\n)
+                    memcpy(buf, ctx->internal_buf, copy_len);
+                    buf[copy_len] = '\0'; // Kết thúc chuỗi
 
-                return (ssize_t)copy_len; // Trả về độ dài dòng đã copy
+                    // Dời phần còn lại lên đầu internal_buf, bắt đầu từ sau '\n'
+                    size_t remain = ctx->internal_len - total_extracted_len;
+                    memmove(ctx->internal_buf, ctx->internal_buf + total_extracted_len, remain);
+                    ctx->internal_len = remain;
+
+                    return (ssize_t)copy_len; // Trả về độ dài dòng đã copy
+                }
             }
         }
-    }
 
         // 2) Không thấy '\r\n' → đọc thêm từ socket
         // Chỉ đọc nếu còn chỗ trống trong buffer
-        if (ctx->internal_len >= sizeof(ctx->internal_buf)) {
+        if (ctx->internal_len >= sizeof(ctx->internal_buf))
+        {
             // Buffer đầy mà không có CRLF -> lỗi giao thức/dòng quá dài.
             size_t copy_len = maxlen - 1; // Cắt dòng theo kích thước buffer đầu ra
-            if (copy_len > 0) {
+            if (copy_len > 0)
+            {
                 memcpy(buf, ctx->internal_buf, copy_len);
                 buf[copy_len] = '\0';
             }
-            
+
             size_t remain = ctx->internal_len - copy_len;
             memmove(ctx->internal_buf, ctx->internal_buf + copy_len, remain);
             ctx->internal_len = remain;
 
-            if (copy_len > 0) return (ssize_t)copy_len;
+            if (copy_len > 0)
+                return (ssize_t)copy_len;
         }
 
         ssize_t n = recv(sock,
@@ -601,7 +635,7 @@ void handle_scan_struct(int sock, Database *db)
     {
         if (db->devices[i].auth.connected)
         {
-            snprintf(out, sizeof(out), "%s || %s || %s || %s \r\n", db->devices[i].deviceId, db->devices[i].type, db->devices[i].name, db->devices[i].auth.token    );
+            snprintf(out, sizeof(out), "%s || %s || %s || %s \r\n", db->devices[i].deviceId, db->devices[i].type, db->devices[i].name, db->devices[i].auth.token);
             send(sock, out, strlen(out), 0);
         }
     }
@@ -628,32 +662,37 @@ Device *find_device_byId(Database *db, const char *id)
     }
     return NULL;
 }
-Device* find_device_byToken(Database *db, const char *token)
+Device *find_device_byToken(Database *db, const char *token)
 {
-    for (int i = 0; i < db->deviceCount; i++) {
+    for (int i = 0; i < db->deviceCount; i++)
+    {
         if (strcmp(db->devices[i].auth.token, token) == 0)
             return &db->devices[i];
     }
     return NULL;
 }
 
-void handle_connect(int sockfd, Database *db, const char *line) {
+void handle_connect(int sockfd, Database *db, const char *line)
+{
     char id[64], pass[64];
 
-    if (sscanf(line + 8, "%63s %63s", id, pass) != 2) {
-        send_reply(sockfd, "203");  // invalid params
+    if (sscanf(line + 8, "%63s %63s", id, pass) != 2)
+    {
+        send_reply(sockfd, "203"); // invalid params
         return;
     }
     pthread_mutex_lock(&db_mutex);
     Device *d = find_device_byId(db, id);
-    if (!d) {
-        send_reply(sockfd, "202");  // device not found
+    if (!d)
+    {
+        send_reply(sockfd, "202"); // device not found
         pthread_mutex_unlock(&db_mutex);
         return;
     }
 
-    if (strcmp(d->auth.password, pass) != 0) {
-        send_reply(sockfd, "201");  // wrong password
+    if (strcmp(d->auth.password, pass) != 0)
+    {
+        send_reply(sockfd, "201"); // wrong password
         pthread_mutex_unlock(&db_mutex);
         return;
     }
@@ -661,10 +700,11 @@ void handle_connect(int sockfd, Database *db, const char *line) {
     // ---- Authentication success ----
 
     // If no token → generate new
-    if (strlen(d->auth.token) == 0) {
+    if (strlen(d->auth.token) == 0)
+    {
         char newToken[32];
         generate_token(newToken, 16);
-        
+
         strcpy(d->auth.token, newToken);
         d->auth.connected = true;
 
@@ -674,31 +714,32 @@ void handle_connect(int sockfd, Database *db, const char *line) {
     // reply format: 200 <device ID> <token>
     char reply[256];
     snprintf(reply, sizeof(reply),
-        "200 %s %s",
-        d->deviceId,
-        d->auth.token
-    );
+             "200 %s %s",
+             d->deviceId,
+             d->auth.token);
     pthread_mutex_unlock(&db_mutex);
 
     send_reply(sockfd, reply);
 }
 
-void handle_pass(int sockfd, Database *db, const char *line) {
+void handle_pass(int sockfd, Database *db, const char *line)
+{
     char token[64], oldp[64], newp[64];
 
-    if (sscanf(line + 5, "%63s %63s", token, newp) != 2) {
+    if (sscanf(line + 5, "%63s %63s", token, newp) != 2)
+    {
         send_reply(sockfd, "203"); // invalid params
         return;
     }
     pthread_mutex_lock(&db_mutex);
 
     Device *d = find_device_byToken(db, token);
-    if (!d) {
+    if (!d)
+    {
         send_reply(sockfd, "401"); // invalid token
         pthread_mutex_unlock(&db_mutex);
         return;
     }
-
 
     // ---- Authentication success ----
 
@@ -707,7 +748,6 @@ void handle_pass(int sockfd, Database *db, const char *line) {
     pthread_mutex_unlock(&db_mutex);
     send_reply(sockfd, "210"); // Success - password changed
 }
-
 
 void *client_thread(void *arg)
 {
@@ -726,7 +766,7 @@ void *client_thread(void *arg)
     while (1)
     {
         ssize_t r = recv_line(sockfd, &recv_ctx, line, sizeof(line));
-        printf("DEBUG recv_line return = %zd, cmd = [%s]\n",r, line);
+        printf("DEBUG recv_line return = %zd, cmd = [%s]\n", r, line);
         if (r == 0)
         {
             printf("[thread %lu] client disconnected.\n", (unsigned long)pthread_self());
@@ -816,6 +856,36 @@ void *client_thread(void *arg)
                 }
             }
         }
+        else if (strncmp(line, "SPEED", 5) == 0)
+        {
+            char token[128];
+            int speed;
+            if (sscanf(line, "SPEED %127s %d", token, &speed) == 2)
+            {
+                int res = handle_speed_device(db, token, speed);
+                if (res == 400)
+                {
+                    send_reply(sockfd, "400"); // invalid speed
+                }
+                else if (res == 502)
+                {
+                    send_reply(sockfd, "502"); // device is off
+                }
+                else if (res == 405)
+                {
+                    send_reply(sockfd, "405"); // device not support speed
+                }
+                else
+                {
+                    save_database(db);
+                    send_reply(sockfd, "200");
+                }
+            }
+            else
+            {
+                send_reply(sockfd, "203"); // invalid format
+            }
+        }
         /* ---- Unknown command ---- */
         else
         {
@@ -893,8 +963,8 @@ int main(int argc, char *argv[])
         printf("New connection from %s:%d\n", client_ip, client_port);
 
         ThreadArgs *args = malloc(sizeof(ThreadArgs));
-        args->sockfd = clientSock; // socket của client
-        args->db = &db;            // trỏ tới database đã load
+        args->sockfd = clientSock;                          // socket của client
+        args->db = &db;                                     // trỏ tới database đã load
         memset(&args->recv_ctx, 0, sizeof(args->recv_ctx)); // initialize per-connection recv context
 
         pthread_create(&tid, NULL, client_thread, args);
