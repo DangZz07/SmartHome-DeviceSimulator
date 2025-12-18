@@ -90,12 +90,12 @@
 			"type":	"light",
 			"name":	"super_light",
 			"auth":	{
-				"password":	"1",
+				"password":	"123",
 				"connected":	true,
 				"Token":	"C9F9682FB8A74370"
 			},
 			"state":	{
-				"power":	"OFF",
+				"power":	"ON",
 				"timer":	0,
 				"speed":	null,
 				"mode":	null,
@@ -107,6 +107,31 @@
 					"day":	2.3,
 					"month":	40.1,
 					"year":	410
+				}
+			},
+			"logs":	[]
+		}, {
+			"deviceId":	"DEV_005",
+			"type":	"LIGHT",
+			"name":	"DEV_005",
+			"auth":	{
+				"password":	"123",
+				"connected":	true,
+				"Token":	"80C9C44E0B3A60FE"
+			},
+			"state":	{
+				"power":	"ON",
+				"timer":	0,
+				"speed":	null,
+				"mode":	"null",
+				"temperature":	null
+			},
+			"powerUsage":	{
+				"currentWatt":	0,
+				"usageHistory":	{
+					"day":	0,
+					"month":	0,
+					"year":	0
 				}
 			},
 			"logs":	[]

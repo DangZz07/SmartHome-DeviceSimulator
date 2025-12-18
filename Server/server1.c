@@ -547,48 +547,44 @@ ssize_t recv_line(int sock, RecvContext *ctx, char *buf, size_t maxlen)
 {
     while (1)
     {
-        // Đảm bảo dữ liệu trong internal_buf luôn là một chuỗi hợp lệ để strstr hoạt động
+
         ctx->internal_buf[ctx->internal_len] = '\0';
 
-        // 1. Tìm vị trí của dấu ngắt dòng \r\n
+
         char *pos = strstr(ctx->internal_buf, "\r\n");
 
         if (pos != NULL)
         {
             size_t linelen = pos - ctx->internal_buf;
-            size_t total_extracted_len = linelen + 2; // Tính cả \r\n
-
-            // Copy dòng dữ liệu ra ngoài, giới hạn theo maxlen để an toàn
+            size_t total_extracted_len = linelen + 2; 
             size_t copy_len = (linelen < maxlen - 1) ? linelen : maxlen - 1;
             memcpy(buf, ctx->internal_buf, copy_len);
             buf[copy_len] = '\0';
 
-            // Tính toán phần dữ liệu còn lại sau khi đã cắt dòng
             size_t remain = ctx->internal_len - total_extracted_len;
 
-            // Dịch chuyển phần dư lên đầu buffer (truyền dòng)
+  
             if (remain > 0) {
                 memmove(ctx->internal_buf, ctx->internal_buf + total_extracted_len, remain);
             }
             
             ctx->internal_len = remain;
-            ctx->internal_buf[ctx->internal_len] = '\0'; // Kết thúc chuỗi mới
+            ctx->internal_buf[ctx->internal_len] = '\0'; 
 
             return (ssize_t)copy_len; 
         }
 
-        // 2. Nếu chưa thấy \r\n, nhận thêm một khối dữ liệu lớn từ socket
-        // Lưu ý: trừ đi 1 byte dự phòng cho ký tự '\0'
+
         ssize_t n = recv(sock,
                          ctx->internal_buf + ctx->internal_len,
                          sizeof(ctx->internal_buf) - ctx->internal_len - 1,
                          0);
 
-        if (n == 0) // Client đóng kết nối
+        if (n == 0)
         {
             return 0;
         }
-        if (n < 0) // Lỗi kết nối
+        if (n < 0) 
         {
             return -1;
         }
@@ -726,6 +722,80 @@ void handle_pass(int sockfd, Database *db, const char *line)
     send_reply(sockfd, "210"); // Success - password changed
 }
 
+void handle_init(int sockfd, Database *db, const char *line)
+{
+    char id[64], pass[64], type[32];
+
+    // Bóc tách: INIT <ID> <PASS> <TYPE>
+    if (sscanf(line + 5, "%63s %63s %31s", id, pass, type) != 3)
+    {
+        send_reply(sockfd, "203"); // Invalid format
+        return;
+    }
+
+    pthread_mutex_lock(&db_mutex);
+
+    // 1. Kiểm tra xem Device ID đã tồn tại trong DB chưa
+    for (int i = 0; i < db->deviceCount; i++) {
+        if (strcmp(db->devices[i].deviceId, id) == 0) {
+            send_reply(sockfd, "221"); // ID already exists (mượn mã 221 hoặc mã lỗi riêng)
+            pthread_mutex_unlock(&db_mutex);
+            return;
+        }
+    }
+
+    // 2. Tạo thiết bị mới (Giả sử db->devices là mảng struct)
+    Device *new_dev = &db->devices[db->deviceCount];
+    
+    strcpy(new_dev->deviceId, id);
+    strcpy(new_dev->type, type);
+    strcpy(new_dev->name, id); // Mặc định tên giống ID
+    
+    // Auth
+    strcpy(new_dev->auth.password, pass);
+    new_dev->auth.connected = false;
+    strcpy(new_dev->auth.token, ""); // Chưa có token khi chưa connect
+
+    // State mặc định dựa trên TYPE
+    strcpy(new_dev->state.power, "OFF");
+    new_dev->state.timer = 0;
+    
+    // Logic gán giá trị mặc định theo loại
+    if (strcasecmp(type, "fan") == 0) {
+        new_dev->state.speed = 1; // Quạt mặc định số 1
+    } else {
+        new_dev->state.speed = -1; // -1 đại diện cho null (không hỗ trợ)
+    }
+
+    if (strcasecmp(type, "ac") == 0) {
+        new_dev->state.temperature = 24; // AC mặc định 24 độ
+        strcpy(new_dev->state.mode, "cool"); // Chế độ mặc định là làm mát
+    } else {
+    
+    new_dev->state.temperature = -1; // null
+    strcpy(new_dev->state.mode, "null"); 
+    }
+          // null
+
+    // Power Usage mặc định
+    // new_dev->powerUsage.currentWatt = 0;
+    // new_dev->powerUsage.day = 0;
+    // new_dev->powerUsage.month = 0;
+    // new_dev->powerUsage.year = 0;
+
+    // // Log khởi tạo
+    // new_dev->logCount = 0;
+
+    db->deviceCount++;
+
+    save_database(db); // Lưu lại file JSON
+    
+    pthread_mutex_unlock(&db_mutex);
+    
+    send_reply(sockfd, "200"); // Success
+    printf("Server: Created new device %s (type: %s)\n", id, type);
+}
+
 void *client_thread(void *arg)
 {
     ThreadArgs *args = (ThreadArgs *)arg;
@@ -770,6 +840,10 @@ void *client_thread(void *arg)
         else if (strncmp(line, "PASS ", 5) == 0)
         {
             handle_pass(sockfd, db, line);
+        }
+        else if (strncmp(line, "INIT ", 5) == 0)
+        {
+            handle_init(sockfd, db, line);
         }
         else if (strcmp(line, "SHOW HOME") == 0)
         {

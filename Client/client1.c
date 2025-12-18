@@ -198,6 +198,36 @@ char *find_scan_token(const char *id)
     }
     return NULL;
 }
+void handle_init_device(int sock)
+{
+    char id[64], pass[64], type[32];
+    char cmd[256], response[BUF_SIZE];
+
+    printf("\n----- Initialize New Device -----\n");
+    
+    printf("Enter Device ID (e.g., L001, F002): ");
+    fgets(id, sizeof(id), stdin);
+    id[strcspn(id, "\n")] = 0;
+
+    printf("Set Password: ");
+    fgets(pass, sizeof(pass), stdin);
+    pass[strcspn(pass, "\n")] = 0;
+
+    printf("Enter Device Type (LIGHT / FAN / AC): ");
+    fgets(type, sizeof(type), stdin);
+    type[strcspn(type, "\n")] = 0;
+
+    // Tạo lệnh theo protocol: INIT <ID> <PW> <TYPE>\r\n
+    snprintf(cmd, sizeof(cmd), "INIT %s %s %s\r\n", id, pass, type);
+    
+    // Gửi đến Server
+    send(sock, cmd, strlen(cmd), 0);
+
+    // Nhận phản hồi dùng hàm receive_line (buffer-based) đã sửa ở trên
+    if (receive_line(sock, response, sizeof(response))) {
+        interpret_response(response); // In ra "SUCCESS" hoặc lỗi dựa trên mã code
+    }
+}
 
 /* ================= HOME ================= */
 void show_home_menu()
@@ -206,6 +236,7 @@ void show_home_menu()
     printf("1. Show Home\n");
     printf("2. Show Room\n");
     printf("3. Scan Devices\n");
+    printf("4. Initialize Devices\n");
     printf("0. Exit\n");
     printf("==========================\n");
     printf("Choose: ");
@@ -236,6 +267,10 @@ void handle_home(int sock)
     else if (c[0] == '3')
     {
         current_screen = SCREEN_SCAN;
+    }
+    else if (c[0] == '4')
+    {
+        handle_init_device(sock);
     }
     else if (c[0] == '0')
     {
@@ -282,6 +317,8 @@ void handle_scan()
 
     current_screen = SCREEN_DEVICE;
 }
+
+
 
 /* ================= DEVICE MENU ================= */
 void show_device_menu()
