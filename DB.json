@@ -17,7 +17,7 @@
 				"Token":	"76931FAC9DAB2B3"
 			},
 			"state":	{
-				"power":	"ON",
+				"power":	"OFF",
 				"timer":	0,
 				"speed":	null,
 				"mode":	null,
@@ -90,9 +90,9 @@
 			"type":	"light",
 			"name":	"super_light",
 			"auth":	{
-				"password":	"abc123",
-				"connected":	false,
-				"Token":	""
+				"password":	"1",
+				"connected":	true,
+				"Token":	"C9F9682FB8A74370"
 			},
 			"state":	{
 				"power":	"OFF",

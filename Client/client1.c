@@ -67,34 +67,52 @@ void interpret_response(const char *code)
 }
 
 /* ================= RECEIVE LINE (CRLF SAFE) ================= */
-static char recvbuf[4096];
-static int recv_len = 0;
+static char message[8192];
+static int message_len = 0;
 
 int receive_line(int sock, char *buffer, size_t size)
 {
-    while (1)
-    {
-        for (int i = 0; i < recv_len - 1; i++)
-        {
-            if (recvbuf[i] == '\r' && recvbuf[i + 1] == '\n')
-            {
-                int len = i;
-                if (len >= size)
-                    len = size - 1;
-                memcpy(buffer, recvbuf, len);
-                buffer[len] = '\0';
+char temp_buff[BUF_SIZE];
+    
+    while (1) {
+        // 1. Kiểm tra xem trong 'message' hiện tại đã có dòng nào chưa (\r\n)
+        char *pos = strstr(message, "\r\n");
+        if (pos != NULL) {
+            int line_len = (int)(pos - message);
+            
+            // Chỉ copy tối đa 'size - 1' để tránh tràn bộ đệm 'buffer'
+            int copy_len = (line_len < (int)size - 1) ? line_len : (int)size - 1;
+            
+            memcpy(buffer, message, copy_len);
+            buffer[copy_len] = '\0';
 
-                memmove(recvbuf, recvbuf + i + 2, recv_len - (i + 2));
-                recv_len -= (i + 2);
-                return len;
+            // Dịch chuyển phần dư lên đầu
+            int consumed = line_len + 2; // +2 là cho \r\n
+            int remaining = message_len - consumed;
+
+            if (remaining > 0) {
+                memmove(message, message + consumed, remaining);
             }
+            message_len = remaining;
+            message[message_len] = '\0'; // Luôn kết thúc chuỗi để strstr chạy đúng lần sau
+            
+            return 1; 
         }
 
-        int n = recv(sock, recvbuf + recv_len,
-                     sizeof(recvbuf) - recv_len, 0);
-        if (n <= 0)
-            return 0;
-        recv_len += n;
+        // 2. Nhận thêm một khối dữ liệu lớn
+        int n = recv(sock, temp_buff, sizeof(temp_buff) - 1, 0);
+        if (n <= 0) return 0;
+
+        // 3. Nối vào bộ đệm tích lũy bằng memcpy (an toàn và nhanh hơn strcat)
+        if (message_len + n < (int)sizeof(message) - 1) {
+            memcpy(message + message_len, temp_buff, n);
+            message_len += n;
+            message[message_len] = '\0'; // Cực kỳ quan trọng để strstr tìm thấy điểm dừng
+        } else {
+            // Buffer quá đầy mà không thấy \r\n, reset để tránh treo
+            message_len = 0;
+            message[0] = '\0';
+        }
     }
 }
 
@@ -150,14 +168,8 @@ int receive_scan_until_end2(int sock)
             char id[64], type[32], name[128], token[64];
 
             if (sscanf(line,
-<<<<<<< HEAD
                        "%63s || %31s || %127s || %63s",
                        id, type, name, token) == 4) {
-=======
-                       "%63s || %31s || %127[^|] || %63s",
-                       id, type, name, token) == 4)
-            {
->>>>>>> 7b91fb9992c3992a5515125ff24361714e86d93c
 
                 // lưu token
                 strcpy(scan_tokens[scan_token_count].id, id);
@@ -322,12 +334,6 @@ void handle_connect(int sock)
 /* ================= POWER ================= */
 void handle_power(int sock)
 {
-    if (!device_connected)
-    {
-        printf("Device not connected!\n");
-        return;
-    }
-
     char c[8], cmd[128], line[BUF_SIZE];
     printf("1. ON\n2. OFF\nChoose: ");
     fgets(c, sizeof(c), stdin);
@@ -345,33 +351,25 @@ void handle_power(int sock)
 /* ================= TIMER ================= */
 void handle_timer(int sock)
 {
-    // Kiem tra da ket noi chua
-    if (!device_connected)
-    {
-        printf("Chua ket noi thiet bi!\n");
-        return;
-    }
-
-    // Khai bao bien
+  
     char minutes[16];
     char action[8];
     char cmd[256];
     char response[BUF_SIZE];
     char choice[8];
 
-    // Nhap so phut
+  
     printf("Nhap so phut hen gio: ");
     fgets(minutes, sizeof(minutes), stdin);
-    minutes[strcspn(minutes, "\n")] = 0; // Xoa ky tu xuong dong
+    minutes[strcspn(minutes, "\n")] = 0;
 
-    // Chon hanh dong
+  
     printf("Hanh dong khi het gio:\n");
     printf("1. Bat (ON)\n");
     printf("2. Tat (OFF)\n");
     printf("Chon: ");
     fgets(choice, sizeof(choice), stdin);
 
-    // Xac dinh action la ON hay OFF
     if (choice[0] == '1')
     {
         strcpy(action, "ON");
@@ -381,43 +379,35 @@ void handle_timer(int sock)
         strcpy(action, "OFF");
     }
 
-    // Tao cau lenh gui len server
-    // Format: TIMER <token> <minutes> <ON/OFF>
+ 
     sprintf(cmd, "TIMER %s %s %s\r\n", current_token, minutes, action);
 
-    // Gui lenh len server
     send(sock, cmd, strlen(cmd), 0);
 
-    // Nhan phan hoi tu server
+
     receive_line(sock, response, sizeof(response));
 
-    // In ket qua
+ 
     interpret_response(response);
 }
 
 void handle_speed(int sock)
 {
-    // Kiem tra da ket noi chua
-    if (!device_connected)
-    {
-        printf("Chua ket noi thiet bi!\n");
-        return;
-    }
+
     char speed[16];
     char cmd[256];
     char response[BUF_SIZE];
-    // Nhap toc do
+
     printf("Nhap toc do (0-3): ");
     fgets(speed, sizeof(speed), stdin);
-    speed[strcspn(speed, "\n")] = 0; // Xoa ky tu xuong dong
-    // Tao cau lenh gui len server
-    // Format: SPEED <token> <speed>
+    speed[strcspn(speed, "\n")] = 0;
+
     sprintf(cmd, "SPEED %s %s\r\n", current_token, speed);
-    // Gui lenh len server
+    
     send(sock, cmd, strlen(cmd), 0);
-    // Nhan phan hoi tu server
+ 
     receive_line(sock, response, sizeof(response));
-    // In ket qua
+   
     interpret_response(response);
 }
 /* ================= CHANGE PASSWORD ================= */
@@ -437,7 +427,7 @@ void handle_change_password(int sock)
     receive_line(sock, line, sizeof(line));
     interpret_response(line);
 
-    /* logout local */
+ 
     current_token[0] = '\0';
     device_connected = 0;
 }

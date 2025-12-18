@@ -542,77 +542,54 @@ int handle_timer_device(Database *db, const char *token, const char *minuteStr, 
     pthread_mutex_unlock(&db_mutex);
     return 401; // invalid token
 }
-/* Safely receive one line (ending with '\n') */
+/* Safely receive one line (ending with '\r\n') - Buffer-based version */
 ssize_t recv_line(int sock, RecvContext *ctx, char *buf, size_t maxlen)
 {
     while (1)
     {
-        if (ctx->internal_len >= 2)
+        // Đảm bảo dữ liệu trong internal_buf luôn là một chuỗi hợp lệ để strstr hoạt động
+        ctx->internal_buf[ctx->internal_len] = '\0';
+
+        // 1. Tìm vị trí của dấu ngắt dòng \r\n
+        char *pos = strstr(ctx->internal_buf, "\r\n");
+
+        if (pos != NULL)
         {
-            // 1) Tìm chuỗi '\r\n' (CRLF) trong internal buffer
-            // Lặp đến internal_len - 1 vì cần 2 byte để kiểm tra '\r' và '\n'
-            for (size_t i = 0; i + 1 < ctx->internal_len; ++i)
-            {
+            size_t linelen = pos - ctx->internal_buf;
+            size_t total_extracted_len = linelen + 2; // Tính cả \r\n
 
-                // Điều kiện tìm thấy CRLF
-                if (ctx->internal_buf[i] == '\r' && ctx->internal_buf[i + 1] == '\n')
-                {
-                    // Độ dài của dòng là từ đầu đến '\r' (không bao gồm '\r\n')
-                    size_t linelen = i;
-                    size_t total_extracted_len = linelen + 2; // Độ dài dòng + \r\n
+            // Copy dòng dữ liệu ra ngoài, giới hạn theo maxlen để an toàn
+            size_t copy_len = (linelen < maxlen - 1) ? linelen : maxlen - 1;
+            memcpy(buf, ctx->internal_buf, copy_len);
+            buf[copy_len] = '\0';
 
-                    // Kích thước tối đa có thể copy vào buf là maxlen - 1
-                    size_t copy_len = linelen < maxlen - 1 ? linelen : maxlen - 1;
+            // Tính toán phần dữ liệu còn lại sau khi đã cắt dòng
+            size_t remain = ctx->internal_len - total_extracted_len;
 
-                    // Copy dòng ra buffer (kết quả) (chỉ copy đến trước \r\n)
-                    memcpy(buf, ctx->internal_buf, copy_len);
-                    buf[copy_len] = '\0'; // Kết thúc chuỗi
-
-                    // Dời phần còn lại lên đầu internal_buf, bắt đầu từ sau '\n'
-                    size_t remain = ctx->internal_len - total_extracted_len;
-                    memmove(ctx->internal_buf, ctx->internal_buf + total_extracted_len, remain);
-                    ctx->internal_len = remain;
-
-                    return (ssize_t)copy_len; // Trả về độ dài dòng đã copy
-                }
+            // Dịch chuyển phần dư lên đầu buffer (truyền dòng)
+            if (remain > 0) {
+                memmove(ctx->internal_buf, ctx->internal_buf + total_extracted_len, remain);
             }
-        }
-
-        // 2) Không thấy '\r\n' → đọc thêm từ socket
-        // Chỉ đọc nếu còn chỗ trống trong buffer
-        if (ctx->internal_len >= sizeof(ctx->internal_buf))
-        {
-            // Buffer đầy mà không có CRLF -> lỗi giao thức/dòng quá dài.
-            size_t copy_len = maxlen - 1; // Cắt dòng theo kích thước buffer đầu ra
-            if (copy_len > 0)
-            {
-                memcpy(buf, ctx->internal_buf, copy_len);
-                buf[copy_len] = '\0';
-            }
-
-            size_t remain = ctx->internal_len - copy_len;
-            memmove(ctx->internal_buf, ctx->internal_buf + copy_len, remain);
+            
             ctx->internal_len = remain;
+            ctx->internal_buf[ctx->internal_len] = '\0'; // Kết thúc chuỗi mới
 
-            if (copy_len > 0)
-                return (ssize_t)copy_len;
+            return (ssize_t)copy_len; 
         }
 
+        // 2. Nếu chưa thấy \r\n, nhận thêm một khối dữ liệu lớn từ socket
+        // Lưu ý: trừ đi 1 byte dự phòng cho ký tự '\0'
         ssize_t n = recv(sock,
                          ctx->internal_buf + ctx->internal_len,
-                         sizeof(ctx->internal_buf) - ctx->internal_len,
+                         sizeof(ctx->internal_buf) - ctx->internal_len - 1,
                          0);
 
-        if (n == 0)
+        if (n == 0) // Client đóng kết nối
         {
-            // server đóng kết nối
-            ctx->internal_len = 0;
             return 0;
         }
-
-        if (n < 0)
+        if (n < 0) // Lỗi kết nối
         {
-            // lỗi socket
             return -1;
         }
 
