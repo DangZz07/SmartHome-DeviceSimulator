@@ -62,6 +62,10 @@ void interpret_response(const char *code)
         printf("221. ALREADY SET/CANCEL\n");
     else if (strcmp(code, "405") == 0)
         printf("→ DEVICE NOT SUPPORT SPEED\n");
+    else if (strcmp(code, "406") == 0)
+        printf("→ DEVICE NOT SUPPORT TEMPERATURE\n");
+    else if (strcmp(code, "407") == 0)
+        printf("→ DEVICE NOT SUPPORT MODE\n");
     else if (strcmp(code, "502") == 0)
         printf("→ DEVICE IS OFF\n");
 }
@@ -336,6 +340,9 @@ void show_device_menu()
         printf("3. Change Password\n");
         printf("4. Timer\n");
         printf("5. Speed\n");
+        printf("6. Temperature\n");
+        printf("7. Mode(Only on AC)\n");
+        printf("8. Power Usage\n");
     }
 
     printf("0. Back\n");
@@ -447,6 +454,72 @@ void handle_speed(int sock)
    
     interpret_response(response);
 }
+/* ================= TEMPERATURE ================= */
+void handle_temperature(int sock)
+{
+    char temperature[16];
+    char cmd[256];
+    char response[BUF_SIZE];
+
+    printf("Nhap nhiet do mong muon: ");
+    fgets(temperature, sizeof(temperature), stdin);
+    temperature[strcspn(temperature, "\n")] = 0;
+
+    sprintf(cmd, "TEMPERATURE %s %s\r\n", current_token, temperature);
+    
+    send(sock, cmd, strlen(cmd), 0);
+ 
+    receive_line(sock, response, sizeof(response));
+   
+    interpret_response(response);
+}
+/* ================= MODE ================= */
+void handle_mode(int sock)
+{
+    char mode[16];
+    char cmd[256];
+    char response[BUF_SIZE];
+    char choice[8];
+    printf("Nhap che do: ");
+    printf("1. COOL❄️\n");
+    printf("2. FAN🌀\n");
+    printf("3. DRY💧\n");
+    printf("Chon: ");
+    fgets(choice, sizeof(choice), stdin);
+    if(choice[0] == '1'){
+        strcpy(mode, "COOL");
+    }
+    else if(choice[0] == '2'){
+        strcpy(mode, "FAN");
+    }
+    else if(choice[0] == '3'){
+        strcpy(mode, "DRY");
+    }
+    else{
+        printf("Invalid choice.\n");
+        return;
+    }
+
+    sprintf(cmd, "MODE %s %s\r\n", current_token, mode);
+    
+    send(sock, cmd, strlen(cmd), 0);
+ 
+    receive_line(sock, response, sizeof(response));
+   
+    interpret_response(response);
+}
+/* ================= POWER USAGE ================= */
+void handle_power_usage(int sock)
+{
+    char cmd[256];
+    char response[BUF_SIZE];
+
+    sprintf(cmd, "POWER USAGE %s\r\n", current_token);
+    
+    send(sock, cmd, strlen(cmd), 0);
+ 
+    receive_scan_until_end(sock);
+}
 /* ================= CHANGE PASSWORD ================= */
 void handle_change_password(int sock)
 {
@@ -529,6 +602,12 @@ int main(int argc, char *argv[])
                     handle_timer(sock);
                 else if (c[0] == '5')
                     handle_speed(sock);
+                else if (c[0] == '6')
+                    handle_temperature(sock);
+                else if (c[0] == '7')
+                    handle_mode(sock);
+                else if (c[0] == '8')
+                    handle_power_usage(sock);
                 else if (c[0] == '0')
                     current_screen = SCREEN_HOME;
             }
