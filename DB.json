@@ -17,18 +17,18 @@
 				"Token":	"76931FAC9DAB2B3"
 			},
 			"state":	{
-				"power":	"OFF",
+				"power":	"ON",
 				"timer":	0,
 				"speed":	null,
 				"mode":	null,
 				"temperature":	null
 			},
 			"powerUsage":	{
-				"currentWatt":	15,
+				"currentWatt":	10,
 				"usageHistory":	{
-					"day":	1.2,
-					"month":	20.5,
-					"year":	200.7
+					"day":	4.5333333333333323,
+					"month":	23.833333333333353,
+					"year":	204.03333333333316
 				}
 			},
 			"logs":	[{
@@ -52,18 +52,18 @@
 				"temperature":	null
 			},
 			"powerUsage":	{
-				"currentWatt":	45,
+				"currentWatt":	35,
 				"usageHistory":	{
-					"day":	2.3,
-					"month":	40.1,
-					"year":	410
+					"day":	13.96666666666667,
+					"month":	51.7666666666667,
+					"year":	421.66666666666634
 				}
 			},
 			"logs":	[]
 		}, {
 			"deviceId":	"DEV_003",
-			"type":	"fan",
-			"name":	"bedroom_fan",
+			"type":	"AC",
+			"name":	"bedroom_air_conditioner",
 			"auth":	{
 				"password":	"abc123",
 				"connected":	true,
@@ -73,15 +73,15 @@
 				"power":	"ON",
 				"timer":	0,
 				"speed":	3,
-				"mode":	null,
-				"temperature":	null
+				"mode":	"COOL",
+				"temperature":	17
 			},
 			"powerUsage":	{
-				"currentWatt":	45,
+				"currentWatt":	1800,
 				"usageHistory":	{
-					"day":	2.3,
-					"month":	40.1,
-					"year":	410
+					"day":	602.3,
+					"month":	640.1,
+					"year":	1010
 				}
 			},
 			"logs":	[]
@@ -102,11 +102,11 @@
 				"temperature":	null
 			},
 			"powerUsage":	{
-				"currentWatt":	45,
+				"currentWatt":	10,
 				"usageHistory":	{
-					"day":	2.3,
-					"month":	40.1,
-					"year":	410
+					"day":	5.6333333333333346,
+					"month":	43.4333333333333,
+					"year":	413.33333333333366
 				}
 			},
 			"logs":	[]
@@ -127,11 +127,11 @@
 				"temperature":	null
 			},
 			"powerUsage":	{
-				"currentWatt":	0,
+				"currentWatt":	10,
 				"usageHistory":	{
-					"day":	0,
-					"month":	0,
-					"year":	0
+					"day":	3.3333333333333321,
+					"month":	3.3333333333333321,
+					"year":	3.3333333333333321
 				}
 			},
 			"logs":	[]

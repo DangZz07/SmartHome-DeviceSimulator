@@ -99,20 +99,20 @@ typedef struct
 // Global mutex để bảo vệ database
 pthread_mutex_t db_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-// ====== TIMER THREAD ======
+// ====== TIMER THREAD AND POWER USAGE THREAD =======
 void *timer_thread(void *arg)
 {
     Database *db = (Database *)arg;
     pthread_detach(pthread_self());
 
-    printf("[Timer Thread] Started - checking every 10 seconds\n");
-
+    printf("[Timer Thread] Started - checking every 60 seconds\n");
+    printf("[Power Usage Thread] Started - updating every 60 seconds\n");
     while (1)
     {
-        sleep(10); // Ngủ 10 giây
+        sleep(60); // Ngủ 60 giây
 
         pthread_mutex_lock(&db_mutex);
-
+        // timer countdown
         int changed = 0;
         for (int i = 0; i < db->deviceCount; i++)
         {
@@ -141,7 +141,56 @@ void *timer_thread(void *arg)
         {
             save_database(db);
         }
+        // power usage update
+        for (int i = 0; i < db->deviceCount; i++)
+        {
+            Device *dev = &db->devices[i];
 
+            // Cập nhật công suất tiêu thụ ngẫu nhiên
+            if (strcmp(dev->state.power, "ON") == 0)
+            {
+                // Nếu thiết bị đang bật
+                if (strcmp(dev->type, "LIGHT") == 0 || strcmp(dev->type, "light") == 0)
+                {
+                    dev->powerUsage.currentWatt = 10; // Đèn tiêu thụ 10W
+                }
+                else if (strcmp(dev->type, "FAN") == 0 || strcmp(dev->type, "fan") == 0)
+                {
+                    if (dev->state.speed == 1)
+                        dev->powerUsage.currentWatt = 20; // tốc độ thấp tiêu thụ 20W
+                    else if (dev->state.speed == 2)
+                        dev->powerUsage.currentWatt = 35; // tốc độ trung bình tiêu thụ 35W
+                    else if (dev->state.speed == 3)
+                        dev->powerUsage.currentWatt = 50; // tốc độ cao tiêu thụ 50W
+                }
+                else if (strcmp(dev->type, "AC") == 0 || strcmp(dev->type, "ac") == 0)
+                {
+                    if (strcmp(dev->state.mode, "FAN") == 0)
+                    {
+                        dev->powerUsage.currentWatt = 100; // chế độ quạt tiêu thụ 500W
+                    }
+                    else if (strcmp(dev->state.mode, "COOL") == 0)
+                    {
+                        dev->powerUsage.currentWatt = 1000; // chế độ làm mát tiêu thụ 1800W
+                    }
+                    else if (strcmp(dev->state.mode, "DRY") == 0)
+                    {
+                        dev->powerUsage.currentWatt = 600; // chế độ kho tiêu thụ 2000W
+                    }
+                }
+            }
+            else
+            {
+                // Nếu thiết bị tắt, công suất là 0W
+                dev->powerUsage.currentWatt = 0;
+            }
+
+            // Cộng dồn vào lịch sử sử dụng
+            dev->powerUsage.usageHistory.day += dev->powerUsage.currentWatt / 1000;   // kWh
+            dev->powerUsage.usageHistory.month += dev->powerUsage.currentWatt / 1000; // kWh
+            dev->powerUsage.usageHistory.year += dev->powerUsage.currentWatt / 1000;  // kWh
+            save_database(db);
+        }
         pthread_mutex_unlock(&db_mutex);
     }
 
@@ -451,6 +500,27 @@ void handle_show_room(Database *db, const char *roomId, int sock)
     // Room not found
     send(sock, "END\r\n", 5, 0);
 }
+// ====== CHECK TYPE DEVICE ======
+int is_device_type(Database *db, const char *token)
+{
+    int result = 0;
+    for (int i = 0; i < db->deviceCount; i++)
+    {
+        Device *dev = &db->devices[i];
+        if (strcmp(dev->auth.token, token) == 0)
+        {
+            if (strcmp(dev->type, "fan") == 0 || strcmp(dev->type, "Fan") == 0)
+                result = 1;
+            else if (strcmp(dev->type, "AC") == 0 || strcmp(dev->type, "ac") == 0)
+                result = 2;
+            else
+                result = 3; // light
+            return result;
+        }
+    }
+
+    return 0; // token not found
+}
 // ====== POWER DEVICE ======
 void handle_power_device(Database *db, const char *token, const char *action)
 {
@@ -473,7 +543,81 @@ void handle_power_device(Database *db, const char *token, const char *action)
     pthread_mutex_unlock(&db_mutex);
 }
 // ====== SPEED DEVICE ======
-int handle_speed_device(Database *db, const char *token, int speed)
+void handle_speed_device(Database *db, const char *token, int speed, int sockfd)
+{
+    pthread_mutex_lock(&db_mutex);
+    int result = 0;
+    for (int i = 0; i < db->deviceCount; i++)
+    {
+        Device *dev = &db->devices[i];
+        if (strcmp(dev->auth.token, token) == 0)
+        {
+            int res = is_device_type(db, token);
+            if (res != 1)
+            {
+                pthread_mutex_unlock(&db_mutex);
+                send_reply(sockfd, "405"); // device not support speed
+                return;
+            }
+            else if (speed < 0 || speed > 3)
+            {
+                pthread_mutex_unlock(&db_mutex);
+                send_reply(sockfd, "400"); // invalid speed
+                return;
+            }
+            else if (strcmp(dev->state.power, "OFF") == 0)
+            {
+                pthread_mutex_unlock(&db_mutex);
+                send_reply(sockfd, "502"); // device is off
+                return;
+            }
+            dev->state.speed = speed;
+            pthread_mutex_unlock(&db_mutex);
+            send_reply(sockfd, "200"); // success
+            return;
+        }
+    }
+
+    pthread_mutex_unlock(&db_mutex);
+    send_reply(sockfd, "202"); // not found
+    return;
+}
+// ====== MODE DEVICE ======
+void handle_mode_device(Database *db, const char *token, const char *mode, int sockfd)
+{
+    pthread_mutex_lock(&db_mutex);
+    int result = 0;
+    for (int i = 0; i < db->deviceCount; i++)
+    {
+        Device *dev = &db->devices[i];
+        if (strcmp(dev->auth.token, token) == 0)
+        {
+            int res = is_device_type(db, token);
+            if (res != 2)
+            {
+                pthread_mutex_unlock(&db_mutex);
+                send_reply(sockfd, "407"); // device not support mode
+                return;
+            }
+            else if (strcmp(dev->state.power, "OFF") == 0)
+            {
+                pthread_mutex_unlock(&db_mutex);
+                send_reply(sockfd, "502"); // device is off
+                return;
+            }
+            strcpy(dev->state.mode, mode);
+            pthread_mutex_unlock(&db_mutex);
+            send_reply(sockfd, "200"); // success
+            return;
+        }
+    }
+
+    pthread_mutex_unlock(&db_mutex);
+    send_reply(sockfd, "202"); // not found
+    return;
+}
+// ====== TEMPERATURE DEVICE ======
+void handle_temperature_device(Database *db, const char *token, int temperature, int sockfd)
 {
     pthread_mutex_lock(&db_mutex);
 
@@ -482,36 +626,46 @@ int handle_speed_device(Database *db, const char *token, int speed)
         Device *dev = &db->devices[i];
         if (strcmp(dev->auth.token, token) == 0)
         {
-            if (dev->state.speed == -1)
+            int result = is_device_type(db, token);
+            if (result != 2)
             {
                 pthread_mutex_unlock(&db_mutex);
-                return 405; // device not support speed
+                send_reply(sockfd, "406"); // device not support temperature
+                return;
             }
-            else if (speed < 0 || speed > 3)
+            if (strcmp(dev->state.power, "OFF") == 0)
             {
                 pthread_mutex_unlock(&db_mutex);
-                return 400; // invalid speed
+                send_reply(sockfd, "502"); // device is off
+                return;
             }
-            else if (strcmp(dev->state.power, "OFF") == 0)
+            if (temperature < 16 || temperature > 30)
             {
                 pthread_mutex_unlock(&db_mutex);
-                return 502; // device is off
+                send_reply(sockfd, "400"); // invalid value
+                return;                    // invalid temperature
             }
-            dev->state.speed = speed;
+            dev->state.temperature = temperature;
             pthread_mutex_unlock(&db_mutex);
-            return 200; // success
+            send_reply(sockfd, "200"); // success
+            return;
         }
     }
 
     pthread_mutex_unlock(&db_mutex);
+    send_reply(sockfd, "202"); // not found
+    return;
 }
 // ====== TIMER DEVICE ======
 
-int handle_timer_device(Database *db, const char *token, const char *minuteStr, const char *action)
+void handle_timer_device(Database *db, const char *token, const char *minuteStr, const char *action, int sockfd)
 {
     int minutes = atoi(minuteStr);
     if (minutes <= 0)
-        return 400; // invalid minute
+    {
+        send_reply(sockfd, "400"); // invalid minute
+        return;
+    }
 
     pthread_mutex_lock(&db_mutex);
 
@@ -523,24 +677,57 @@ int handle_timer_device(Database *db, const char *token, const char *minuteStr, 
             if (strcmp(dev->state.power, action) == 0)
             {
                 pthread_mutex_unlock(&db_mutex);
-                return 221; // already set/cancel
+                send_reply(sockfd, "221"); // already set/cancel
+                return;
             }
             if (strcmp(action, "ON") == 0 || strcmp(action, "OFF") == 0)
             {
                 dev->state.timer = minutes;
                 pthread_mutex_unlock(&db_mutex);
-                return 200; // success
+                send_reply(sockfd, "200"); // success
+                return;
             }
             else
             {
                 pthread_mutex_unlock(&db_mutex);
-                return 500; // invalid action
+                send_reply(sockfd, "500"); // invalid action
+                return;
             }
         }
     }
 
     pthread_mutex_unlock(&db_mutex);
-    return 401; // invalid token
+    send_reply(sockfd, "202"); // device not found
+    return;
+}
+// ====== POWER USAGE DEVICE ======
+void handle_power_usage_device(Database *db, const char *token, int sockfd)
+{
+    pthread_mutex_lock(&db_mutex);
+
+    for (int i = 0; i < db->deviceCount; i++)
+    {
+        Device *dev = &db->devices[i];
+        if (strcmp(dev->auth.token, token) == 0)
+        {
+            char out[256];
+            snprintf(out, sizeof(out),
+                     "CURRENT WATT: %d W\r\nDAILY USAGE: %.2f kWh\r\nMONTHLY USAGE: %.2f kWh\r\nYEARLY USAGE: %.2f kWh\r\n",
+                     dev->powerUsage.currentWatt,
+                     dev->powerUsage.usageHistory.day,
+                     dev->powerUsage.usageHistory.month,
+                     dev->powerUsage.usageHistory.year);
+            pthread_mutex_unlock(&db_mutex);
+            send(sockfd, out, strlen(out), 0);
+            send(sockfd, "END\r\n", 5, 0);
+            return;
+        }
+    }
+
+    pthread_mutex_unlock(&db_mutex);
+    send_reply(sockfd, "202"); // device not found
+    send(sockfd, "END\r\n", 5, 0);
+    return;
 }
 /* Safely receive one line (ending with '\r\n') - Buffer-based version */
 ssize_t recv_line(int sock, RecvContext *ctx, char *buf, size_t maxlen)
@@ -550,30 +737,28 @@ ssize_t recv_line(int sock, RecvContext *ctx, char *buf, size_t maxlen)
 
         ctx->internal_buf[ctx->internal_len] = '\0';
 
-
         char *pos = strstr(ctx->internal_buf, "\r\n");
 
         if (pos != NULL)
         {
             size_t linelen = pos - ctx->internal_buf;
-            size_t total_extracted_len = linelen + 2; 
+            size_t total_extracted_len = linelen + 2;
             size_t copy_len = (linelen < maxlen - 1) ? linelen : maxlen - 1;
             memcpy(buf, ctx->internal_buf, copy_len);
             buf[copy_len] = '\0';
 
             size_t remain = ctx->internal_len - total_extracted_len;
 
-  
-            if (remain > 0) {
+            if (remain > 0)
+            {
                 memmove(ctx->internal_buf, ctx->internal_buf + total_extracted_len, remain);
             }
-            
+
             ctx->internal_len = remain;
-            ctx->internal_buf[ctx->internal_len] = '\0'; 
+            ctx->internal_buf[ctx->internal_len] = '\0';
 
-            return (ssize_t)copy_len; 
+            return (ssize_t)copy_len;
         }
-
 
         ssize_t n = recv(sock,
                          ctx->internal_buf + ctx->internal_len,
@@ -584,7 +769,7 @@ ssize_t recv_line(int sock, RecvContext *ctx, char *buf, size_t maxlen)
         {
             return 0;
         }
-        if (n < 0) 
+        if (n < 0)
         {
             return -1;
         }
@@ -736,8 +921,10 @@ void handle_init(int sockfd, Database *db, const char *line)
     pthread_mutex_lock(&db_mutex);
 
     // 1. Kiểm tra xem Device ID đã tồn tại trong DB chưa
-    for (int i = 0; i < db->deviceCount; i++) {
-        if (strcmp(db->devices[i].deviceId, id) == 0) {
+    for (int i = 0; i < db->deviceCount; i++)
+    {
+        if (strcmp(db->devices[i].deviceId, id) == 0)
+        {
             send_reply(sockfd, "221"); // ID already exists (mượn mã 221 hoặc mã lỗi riêng)
             pthread_mutex_unlock(&db_mutex);
             return;
@@ -746,11 +933,11 @@ void handle_init(int sockfd, Database *db, const char *line)
 
     // 2. Tạo thiết bị mới (Giả sử db->devices là mảng struct)
     Device *new_dev = &db->devices[db->deviceCount];
-    
+
     strcpy(new_dev->deviceId, id);
     strcpy(new_dev->type, type);
     strcpy(new_dev->name, id); // Mặc định tên giống ID
-    
+
     // Auth
     strcpy(new_dev->auth.password, pass);
     new_dev->auth.connected = false;
@@ -759,23 +946,29 @@ void handle_init(int sockfd, Database *db, const char *line)
     // State mặc định dựa trên TYPE
     strcpy(new_dev->state.power, "OFF");
     new_dev->state.timer = 0;
-    
+
     // Logic gán giá trị mặc định theo loại
-    if (strcasecmp(type, "fan") == 0) {
+    if (strcasecmp(type, "fan") == 0)
+    {
         new_dev->state.speed = 1; // Quạt mặc định số 1
-    } else {
+    }
+    else
+    {
         new_dev->state.speed = -1; // -1 đại diện cho null (không hỗ trợ)
     }
 
-    if (strcasecmp(type, "ac") == 0) {
-        new_dev->state.temperature = 24; // AC mặc định 24 độ
+    if (strcasecmp(type, "ac") == 0)
+    {
+        new_dev->state.temperature = 24;     // AC mặc định 24 độ
         strcpy(new_dev->state.mode, "cool"); // Chế độ mặc định là làm mát
-    } else {
-    
-    new_dev->state.temperature = -1; // null
-    strcpy(new_dev->state.mode, "null"); 
     }
-          // null
+    else
+    {
+
+        new_dev->state.temperature = -1; // null
+        strcpy(new_dev->state.mode, "null");
+    }
+    // null
 
     // Power Usage mặc định
     // new_dev->powerUsage.currentWatt = 0;
@@ -789,9 +982,9 @@ void handle_init(int sockfd, Database *db, const char *line)
     db->deviceCount++;
 
     save_database(db); // Lưu lại file JSON
-    
+
     pthread_mutex_unlock(&db_mutex);
-    
+
     send_reply(sockfd, "200"); // Success
     printf("Server: Created new device %s (type: %s)\n", id, type);
 }
@@ -861,6 +1054,18 @@ void *client_thread(void *arg)
                 send_reply(sockfd, "400"); // invalid format
             }
         }
+        else if (strncmp(line, "POWER USAGE", 11) == 0)
+        {
+            char token[128];
+            if (sscanf(line, "POWER USAGE %127s", token) == 1)
+            {
+                handle_power_usage_device(db, token, sockfd);
+            }
+            else
+            {
+                send_reply(sockfd, "203"); // invalid format
+            }
+        }
         else if (strncmp(line, "POWER", 5) == 0)
         {
             char token[128];
@@ -883,28 +1088,8 @@ void *client_thread(void *arg)
             char action[16];
             if (sscanf(line, "TIMER %127s %15s %16s", token, minuteStr, action) == 3)
             {
-                int res = handle_timer_device(db, token, minuteStr, action);
-                if (res == 200)
-                {
-                    save_database(db);
-                    send_reply(sockfd, "200");
-                }
-                else if (res == 400)
-                {
-                    send_reply(sockfd, "400"); // invalid minute
-                }
-                else if (res == 500)
-                {
-                    send_reply(sockfd, "500"); // bad request
-                }
-                else if (res == 401)
-                {
-                    send_reply(sockfd, "401"); // invalid token
-                }
-                else if (res == 221)
-                {
-                    send_reply(sockfd, "221"); // already set/cancel
-                }
+                handle_timer_device(db, token, minuteStr, action, sockfd);
+                save_database(db);
             }
         }
         else if (strncmp(line, "SPEED", 5) == 0)
@@ -913,24 +1098,36 @@ void *client_thread(void *arg)
             int speed;
             if (sscanf(line, "SPEED %127s %d", token, &speed) == 2)
             {
-                int res = handle_speed_device(db, token, speed);
-                if (res == 400)
-                {
-                    send_reply(sockfd, "400"); // invalid speed
-                }
-                else if (res == 502)
-                {
-                    send_reply(sockfd, "502"); // device is off
-                }
-                else if (res == 405)
-                {
-                    send_reply(sockfd, "405"); // device not support speed
-                }
-                else
-                {
-                    save_database(db);
-                    send_reply(sockfd, "200");
-                }
+                handle_speed_device(db, token, speed, sockfd);
+                save_database(db);
+            }
+            else
+            {
+                send_reply(sockfd, "203"); // invalid format
+            }
+        }
+        else if (strncmp(line, "TEMPERATURE", 11) == 0)
+        {
+            char token[128];
+            int temperature;
+            if (sscanf(line, "TEMPERATURE %127s %d", token, &temperature) == 2)
+            {
+                handle_temperature_device(db, token, temperature, sockfd);
+                save_database(db);
+            }
+            else
+            {
+                send_reply(sockfd, "203"); // invalid format
+            }
+        }
+        else if (strncmp(line, "MODE", 4) == 0)
+        {
+            char token[128];
+            char mode[32];
+            if (sscanf(line, "MODE %127s %31s", token, mode) == 2)
+            {
+                handle_mode_device(db, token, mode, sockfd);
+                save_database(db);
             }
             else
             {
