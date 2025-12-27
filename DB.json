@@ -17,14 +17,14 @@
 				"Token":	"76931FAC9DAB2B3"
 			},
 			"state":	{
-				"power":	"ON",
+				"power":	"OFF",
 				"timer":	0,
 				"speed":	null,
 				"mode":	null,
 				"temperature":	null
 			},
 			"powerUsage":	{
-				"currentWatt":	10,
+				"currentWatt":	0,
 				"usageHistory":	{
 					"day":	4.5333333333333323,
 					"month":	23.833333333333353,
@@ -32,8 +32,11 @@
 				}
 			},
 			"logs":	[{
-					"time":	"2025-12-02 21:45:00",
-					"action":	"POWER ON"
+					"time":	"2025-12-27 17:06:03",
+					"action":	"POWER SET ON SPEED -1 MODE  TEMPERATURE -1 TIMER 0"
+				}, {
+					"time":	"2025-12-27 17:06:17",
+					"action":	"POWER SET OFF SPEED -1 MODE  TEMPERATURE -1 TIMER 0"
 				}]
 		}, {
 			"deviceId":	"DEV_002",
@@ -52,14 +55,32 @@
 				"temperature":	null
 			},
 			"powerUsage":	{
-				"currentWatt":	35,
+				"currentWatt":	350,
 				"usageHistory":	{
-					"day":	13.96666666666667,
-					"month":	51.7666666666667,
-					"year":	421.66666666666634
+					"day":	14.398333333333339,
+					"month":	52.1983333333335,
+					"year":	422.09833333333262
 				}
 			},
-			"logs":	[]
+			"logs":	[{
+					"time":	"2025-12-05 14:20:30",
+					"action":	"POWER ON SPEED 3 MODE  TEMPERATURE -1 TIMER 0"
+				}, {
+					"time":	"2025-12-18 11:10:15",
+					"action":	"POWER ON SPEED 2 MODE  TEMPERATURE -1 TIMER 0"
+				}, {
+					"time":	"2025-12-22 16:45:50",
+					"action":	"POWER OFF SPEED 3 MODE  TEMPERATURE -1 TIMER 0"
+				}, {
+					"time":	"2025-12-27 08:30:05",
+					"action":	"POWER ON SPEED 3 MODE  TEMPERATURE -1 TIMER 0"
+				}, {
+					"time":	"2025-12-27 12:00:00",
+					"action":	"POWER ON SPEED 1 MODE  TEMPERATURE -1 TIMER 0"
+				}, {
+					"time":	"2025-12-27 17:06:49",
+					"action":	"POWER ON SPEED 3 MODE  TEMPERATURE -1 TIMER 0"
+				}]
 		}, {
 			"deviceId":	"DEV_003",
 			"type":	"AC",
@@ -72,19 +93,25 @@
 			"state":	{
 				"power":	"ON",
 				"timer":	0,
-				"speed":	3,
-				"mode":	"COOL",
-				"temperature":	17
+				"speed":	null,
+				"mode":	"FAN",
+				"temperature":	20
 			},
 			"powerUsage":	{
-				"currentWatt":	1800,
+				"currentWatt":	900,
 				"usageHistory":	{
-					"day":	602.3,
-					"month":	640.1,
-					"year":	1010
+					"day":	119.11000000000004,
+					"month":	119.11000000000004,
+					"year":	119.11000000000004
 				}
 			},
-			"logs":	[]
+			"logs":	[{
+					"time":	"2025-12-27 17:37:55",
+					"action":	"POWER ON SPEED 3 MODE COOL TEMPERATURE 20 TIMER 0"
+				}, {
+					"time":	"2025-12-27 17:38:12",
+					"action":	"POWER ON SPEED 3 MODE FAN TEMPERATURE 20 TIMER 0"
+				}]
 		}, {
 			"deviceId":	"DEV_004",
 			"type":	"light",
@@ -95,21 +122,27 @@
 				"Token":	"C9F9682FB8A74370"
 			},
 			"state":	{
-				"power":	"ON",
+				"power":	"OFF",
 				"timer":	0,
 				"speed":	null,
 				"mode":	null,
 				"temperature":	null
 			},
 			"powerUsage":	{
-				"currentWatt":	10,
+				"currentWatt":	0,
 				"usageHistory":	{
 					"day":	5.6333333333333346,
 					"month":	43.4333333333333,
 					"year":	413.33333333333366
 				}
 			},
-			"logs":	[]
+			"logs":	[{
+					"time":	"2025-12-27 17:40:22",
+					"action":	"POWER ON SPEED -1 MODE  TEMPERATURE -1 TIMER 0"
+				}, {
+					"time":	"2025-12-27 17:40:37",
+					"action":	"POWER OFF SPEED -1 MODE  TEMPERATURE -1 TIMER 0"
+				}]
 		}, {
 			"deviceId":	"DEV_005",
 			"type":	"LIGHT",
@@ -127,14 +160,20 @@
 				"temperature":	null
 			},
 			"powerUsage":	{
-				"currentWatt":	10,
+				"currentWatt":	100,
 				"usageHistory":	{
-					"day":	3.3333333333333321,
-					"month":	3.3333333333333321,
-					"year":	3.3333333333333321
+					"day":	0.12333333333333317,
+					"month":	0.12333333333333317,
+					"year":	0.12333333333333317
 				}
 			},
-			"logs":	[]
+			"logs":	[{
+					"time":	"2025-12-27 17:41:05",
+					"action":	"POWER OFF SPEED -1 MODE null TEMPERATURE -1 TIMER 0"
+				}, {
+					"time":	"2025-12-27 17:41:07",
+					"action":	"POWER ON SPEED -1 MODE null TEMPERATURE -1 TIMER 0"
+				}]
 		}, {
 			"deviceId":	"DEV_006",
 			"type":	"FAN",

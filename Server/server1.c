@@ -26,6 +26,9 @@ typedef struct
 {
     int currentWatt;
     UsageHistory usageHistory;
+    int lastDay;
+    int lastMonth;
+    int lastYear;
 } PowerUsage;
 
 typedef struct
@@ -99,104 +102,6 @@ typedef struct
 // Global mutex để bảo vệ database
 pthread_mutex_t db_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-// ====== TIMER THREAD AND POWER USAGE THREAD =======
-void *timer_thread(void *arg)
-{
-    Database *db = (Database *)arg;
-    pthread_detach(pthread_self());
-
-    printf("[Timer Thread] Started - checking every 60 seconds\n");
-    printf("[Power Usage Thread] Started - updating every 60 seconds\n");
-    while (1)
-    {
-        sleep(60); // Ngủ 60 giây
-
-        pthread_mutex_lock(&db_mutex);
-        // timer countdown
-        int changed = 0;
-        for (int i = 0; i < db->deviceCount; i++)
-        {
-            Device *dev = &db->devices[i];
-
-            if (dev->state.timer > 0)
-            {
-                dev->state.timer--;
-                changed = 1;
-
-                printf("[Timer] %s: %d seconds remaining\n",
-                       dev->deviceId, dev->state.timer * 10);
-
-                // Nếu timer về 0, thực hiện hành động
-                if (dev->state.timer == 0)
-                {
-                    printf("[Timer] %s: Timer expired! Action completed.\n",
-                           dev->deviceId);
-                    // Tắt thiết bị khi timer hết
-                    strcpy(dev->state.power, "OFF");
-                }
-            }
-        }
-
-        if (changed)
-        {
-            save_database(db);
-        }
-        // power usage update
-        for (int i = 0; i < db->deviceCount; i++)
-        {
-            Device *dev = &db->devices[i];
-
-            // Cập nhật công suất tiêu thụ ngẫu nhiên
-            if (strcmp(dev->state.power, "ON") == 0)
-            {
-                // Nếu thiết bị đang bật
-                if (strcmp(dev->type, "LIGHT") == 0 || strcmp(dev->type, "light") == 0)
-                {
-                    dev->powerUsage.currentWatt = 10; // Đèn tiêu thụ 10W
-                }
-                else if (strcmp(dev->type, "FAN") == 0 || strcmp(dev->type, "fan") == 0)
-                {
-                    if (dev->state.speed == 1)
-                        dev->powerUsage.currentWatt = 20; // tốc độ thấp tiêu thụ 20W
-                    else if (dev->state.speed == 2)
-                        dev->powerUsage.currentWatt = 35; // tốc độ trung bình tiêu thụ 35W
-                    else if (dev->state.speed == 3)
-                        dev->powerUsage.currentWatt = 50; // tốc độ cao tiêu thụ 50W
-                }
-                else if (strcmp(dev->type, "AC") == 0 || strcmp(dev->type, "ac") == 0)
-                {
-                    if (strcmp(dev->state.mode, "FAN") == 0)
-                    {
-                        dev->powerUsage.currentWatt = 100; // chế độ quạt tiêu thụ 500W
-                    }
-                    else if (strcmp(dev->state.mode, "COOL") == 0)
-                    {
-                        dev->powerUsage.currentWatt = 1000; // chế độ làm mát tiêu thụ 1800W
-                    }
-                    else if (strcmp(dev->state.mode, "DRY") == 0)
-                    {
-                        dev->powerUsage.currentWatt = 600; // chế độ kho tiêu thụ 2000W
-                    }
-                }
-            }
-            else
-            {
-                // Nếu thiết bị tắt, công suất là 0W
-                dev->powerUsage.currentWatt = 0;
-            }
-
-            // Cộng dồn vào lịch sử sử dụng
-            dev->powerUsage.usageHistory.day += dev->powerUsage.currentWatt / 1000;   // kWh
-            dev->powerUsage.usageHistory.month += dev->powerUsage.currentWatt / 1000; // kWh
-            dev->powerUsage.usageHistory.year += dev->powerUsage.currentWatt / 1000;  // kWh
-            save_database(db);
-        }
-        pthread_mutex_unlock(&db_mutex);
-    }
-
-    return NULL;
-}
-
 int load_database(Database *db)
 {
     FILE *f = fopen("DB.json", "r");
@@ -224,6 +129,12 @@ int load_database(Database *db)
         free(buffer);
         return 0;
     }
+
+    time_t now = time(NULL);
+    struct tm *tm_now = localtime(&now);
+    int today = tm_now ? tm_now->tm_mday : 1;
+    int thisMonth = tm_now ? tm_now->tm_mon + 1 : 1;
+    int thisYear = tm_now ? tm_now->tm_year + 1900 : 1970;
 
     // -------- HOME --------
     cJSON *home = cJSON_GetObjectItem(root, "home");
@@ -293,6 +204,9 @@ int load_database(Database *db)
         dev->powerUsage.usageHistory.day = cJSON_GetObjectItem(hist, "day")->valuedouble;
         dev->powerUsage.usageHistory.month = cJSON_GetObjectItem(hist, "month")->valuedouble;
         dev->powerUsage.usageHistory.year = cJSON_GetObjectItem(hist, "year")->valuedouble;
+        dev->powerUsage.lastDay = today;
+        dev->powerUsage.lastMonth = thisMonth;
+        dev->powerUsage.lastYear = thisYear;
 
         // LOGS
         cJSON *logs = cJSON_GetObjectItem(d, "logs");
@@ -428,6 +342,148 @@ int save_database(Database *db)
     return 1;
 }
 
+// ====== ADD LOG ======
+void add_log(Device *dev, const char *text)
+{
+    if (dev->logCount >= 64)
+    {
+        // Nếu đã đầy, xóa log cũ nhất
+        for (int i = 1; i < 64; i++)
+        {
+            dev->logs[i - 1] = dev->logs[i];
+        }
+        dev->logCount--;
+    }
+
+    time_t now = time(NULL);
+    strftime(dev->logs[dev->logCount].time, sizeof(dev->logs[dev->logCount].time), "%Y-%m-%d %H:%M:%S", localtime(&now));
+    strncpy(dev->logs[dev->logCount].action, text, sizeof(dev->logs[dev->logCount].action) - 1);
+    dev->logs[dev->logCount].action[sizeof(dev->logs[dev->logCount].action) - 1] = '\0';
+    dev->logCount++;
+}
+
+// ====== TIMER THREAD AND POWER USAGE THREAD =======
+void *timer_thread(void *arg)
+{
+    Database *db = (Database *)arg;
+    pthread_detach(pthread_self());
+
+    printf("[Timer Thread] Started - checking every 60 seconds\n");
+    printf("[Power Usage Thread] Started - updating every 60 seconds\n");
+    while (1)
+    {
+        sleep(60); // Ngủ 60 giây
+
+        pthread_mutex_lock(&db_mutex);
+        time_t now = time(NULL);
+        struct tm *tm_now = localtime(&now);
+        int today = tm_now ? tm_now->tm_mday : -1;
+        int thisMonth = tm_now ? tm_now->tm_mon + 1 : -1;
+        int thisYear = tm_now ? tm_now->tm_year + 1900 : -1;
+        // timer countdown
+        int changed = 0;
+        for (int i = 0; i < db->deviceCount; i++)
+        {
+            Device *dev = &db->devices[i];
+
+            if (dev->state.timer > 0)
+            {
+                dev->state.timer--;
+                changed = 1;
+
+                printf("[Timer] %s: %d seconds remaining\n",
+                       dev->deviceId, dev->state.timer * 10);
+
+                // Nếu timer về 0, thực hiện hành động
+                if (dev->state.timer == 0)
+                {
+                    printf("[Timer] %s: Timer expired! Action completed.\n",
+                           dev->deviceId);
+                    // Tắt thiết bị khi timer hết
+                    strcpy(dev->state.power, "OFF");
+                    char logbuf[128];
+                    snprintf(logbuf, sizeof(logbuf), "POWER OFF SPEED %d MODE %s TEMPERATURE %d", dev->state.speed, dev->state.mode, dev->state.temperature); // add log
+                    add_log(dev, logbuf);
+                }
+            }
+        }
+
+        if (changed)
+        {
+            save_database(db);
+        }
+        // power usage update
+        for (int i = 0; i < db->deviceCount; i++)
+        {
+            Device *dev = &db->devices[i];
+
+            if (thisYear != -1 && dev->powerUsage.lastYear != thisYear)
+            {
+                dev->powerUsage.usageHistory.year = 0;
+                dev->powerUsage.lastYear = thisYear;
+            }
+            if (thisMonth != -1 && dev->powerUsage.lastMonth != thisMonth)
+            {
+                dev->powerUsage.usageHistory.month = 0;
+                dev->powerUsage.lastMonth = thisMonth;
+            }
+            if (today != -1 && dev->powerUsage.lastDay != today)
+            {
+                dev->powerUsage.usageHistory.day = 0;
+                dev->powerUsage.lastDay = today;
+            }
+
+            // Cập nhật công suất tiêu thụ ngẫu nhiên
+            if (strcmp(dev->state.power, "ON") == 0)
+            {
+                // Nếu thiết bị đang bật
+                if (strcmp(dev->type, "LIGHT") == 0 || strcmp(dev->type, "light") == 0)
+                {
+                    dev->powerUsage.currentWatt = 100; // Đèn tiêu thụ 10W
+                }
+                else if (strcmp(dev->type, "FAN") == 0 || strcmp(dev->type, "fan") == 0)
+                {
+                    if (dev->state.speed == 1)
+                        dev->powerUsage.currentWatt = 200; // tốc độ thấp tiêu thụ 20W
+                    else if (dev->state.speed == 2)
+                        dev->powerUsage.currentWatt = 350; // tốc độ trung bình tiêu thụ 35W
+                    else if (dev->state.speed == 3)
+                        dev->powerUsage.currentWatt = 500; // tốc độ cao tiêu thụ 50W
+                }
+                else if (strcmp(dev->type, "AC") == 0 || strcmp(dev->type, "ac") == 0)
+                {
+                    if (strcmp(dev->state.mode, "FAN") == 0)
+                    {
+                        dev->powerUsage.currentWatt = 900; // chế độ quạt tiêu thụ 500W
+                    }
+                    else if (strcmp(dev->state.mode, "COOL") == 0)
+                    {
+                        dev->powerUsage.currentWatt = 1500; // chế độ làm mát tiêu thụ 1800W
+                    }
+                    else if (strcmp(dev->state.mode, "DRY") == 0)
+                    {
+                        dev->powerUsage.currentWatt = 1200; // chế độ kho tiêu thụ 2000W
+                    }
+                }
+            }
+            else
+            {
+                // Nếu thiết bị tắt, công suất là 0W
+                dev->powerUsage.currentWatt = 0;
+            }
+
+            // Cộng dồn vào lịch sử sử dụng công thức kWh= (Wattxt/60)/1000 với t tính theo phút
+            dev->powerUsage.usageHistory.day += (double)dev->powerUsage.currentWatt / 60000.0;   // kWh
+            dev->powerUsage.usageHistory.month += (double)dev->powerUsage.currentWatt / 60000.0; // kWh
+            dev->powerUsage.usageHistory.year += (double)dev->powerUsage.currentWatt / 60000.0;  // kWh
+        }
+        save_database(db);
+        pthread_mutex_unlock(&db_mutex);
+    }
+
+    return NULL;
+}
+
 void generate_token(char *token, int len)
 {
     const char *hex = "0123456789ABCDEF";
@@ -444,6 +500,14 @@ void trim_end(char *s)
         s[i] = '\0';
         i--;
     }
+}
+
+/* Send a reply code to the client */
+void send_reply(int sock, const char *code)
+{
+    char out[64];
+    snprintf(out, sizeof(out), "%s\r\n", code);
+    send(sock, out, strlen(out), 0);
 }
 // ====== SHOW HOME ======
 void handle_show_home(Database *db, int sock)
@@ -524,6 +588,7 @@ int is_device_type(Database *db, const char *token)
 // ====== POWER DEVICE ======
 void handle_power_device(Database *db, const char *token, const char *action)
 {
+    char logbuf[128];
     pthread_mutex_lock(&db_mutex);
 
     for (int i = 0; i < db->deviceCount; i++)
@@ -534,17 +599,19 @@ void handle_power_device(Database *db, const char *token, const char *action)
             if (strcmp(action, "ON") == 0 || strcmp(action, "OFF") == 0)
             {
                 strcpy(dev->state.power, action);
+                snprintf(logbuf, sizeof(logbuf), "POWER %s SPEED %d MODE %s TEMPERATURE %d TIMER %d", action, dev->state.speed, dev->state.mode, dev->state.temperature, dev->state.timer); // ghi log
+                add_log(dev, logbuf);
             }
             pthread_mutex_unlock(&db_mutex);
             return;
         }
     }
-
     pthread_mutex_unlock(&db_mutex);
 }
 // ====== SPEED DEVICE ======
 void handle_speed_device(Database *db, const char *token, int speed, int sockfd)
 {
+    char logbuf[128];
     pthread_mutex_lock(&db_mutex);
     int result = 0;
     for (int i = 0; i < db->deviceCount; i++)
@@ -572,12 +639,13 @@ void handle_speed_device(Database *db, const char *token, int speed, int sockfd)
                 return;
             }
             dev->state.speed = speed;
+            snprintf(logbuf, sizeof(logbuf), "POWER %s SPEED %d MODE %s TEMPERATURE %d TIMER %d", dev->state.power, speed, dev->state.mode, dev->state.temperature, dev->state.timer); // add log
+            add_log(dev, logbuf);
             pthread_mutex_unlock(&db_mutex);
             send_reply(sockfd, "200"); // success
             return;
         }
     }
-
     pthread_mutex_unlock(&db_mutex);
     send_reply(sockfd, "202"); // not found
     return;
@@ -587,6 +655,7 @@ void handle_mode_device(Database *db, const char *token, const char *mode, int s
 {
     pthread_mutex_lock(&db_mutex);
     int result = 0;
+    char logbuf[128];
     for (int i = 0; i < db->deviceCount; i++)
     {
         Device *dev = &db->devices[i];
@@ -606,6 +675,8 @@ void handle_mode_device(Database *db, const char *token, const char *mode, int s
                 return;
             }
             strcpy(dev->state.mode, mode);
+            snprintf(logbuf, sizeof(logbuf), "POWER %s SPEED %d MODE %s TEMPERATURE %d TIMER %d", dev->state.power, dev->state.speed, mode, dev->state.temperature, dev->state.timer); // add log
+            add_log(dev, logbuf);
             pthread_mutex_unlock(&db_mutex);
             send_reply(sockfd, "200"); // success
             return;
@@ -620,7 +691,7 @@ void handle_mode_device(Database *db, const char *token, const char *mode, int s
 void handle_temperature_device(Database *db, const char *token, int temperature, int sockfd)
 {
     pthread_mutex_lock(&db_mutex);
-
+    char logbuf[128];
     for (int i = 0; i < db->deviceCount; i++)
     {
         Device *dev = &db->devices[i];
@@ -646,6 +717,8 @@ void handle_temperature_device(Database *db, const char *token, int temperature,
                 return;                    // invalid temperature
             }
             dev->state.temperature = temperature;
+            snprintf(logbuf, sizeof(logbuf), "POWER %s SPEED %d MODE %s TEMPERATURE %d TIMER %d", dev->state.power, dev->state.speed, dev->state.mode, temperature, dev->state.timer); // add log
+            add_log(dev, logbuf);
             pthread_mutex_unlock(&db_mutex);
             send_reply(sockfd, "200"); // success
             return;
@@ -666,7 +739,7 @@ void handle_timer_device(Database *db, const char *token, const char *minuteStr,
         send_reply(sockfd, "400"); // invalid minute
         return;
     }
-
+    char logbuf[128];
     pthread_mutex_lock(&db_mutex);
 
     for (int i = 0; i < db->deviceCount; i++)
@@ -683,6 +756,8 @@ void handle_timer_device(Database *db, const char *token, const char *minuteStr,
             if (strcmp(action, "ON") == 0 || strcmp(action, "OFF") == 0)
             {
                 dev->state.timer = minutes;
+                snprintf(logbuf, sizeof(logbuf), "POWER %s SPEED %d MODE %s TEMPERATURE %d TIMER %d", dev->state.power, dev->state.speed, dev->state.mode, dev->state.temperature, minutes); // add log
+                add_log(dev, logbuf);
                 pthread_mutex_unlock(&db_mutex);
                 send_reply(sockfd, "200"); // success
                 return;
@@ -717,6 +792,57 @@ void handle_power_usage_device(Database *db, const char *token, int sockfd)
                      dev->powerUsage.usageHistory.day,
                      dev->powerUsage.usageHistory.month,
                      dev->powerUsage.usageHistory.year);
+            pthread_mutex_unlock(&db_mutex);
+            send(sockfd, out, strlen(out), 0);
+            send(sockfd, "END\r\n", 5, 0);
+            return;
+        }
+    }
+
+    pthread_mutex_unlock(&db_mutex);
+    send_reply(sockfd, "202"); // device not found
+    send(sockfd, "END\r\n", 5, 0);
+    return;
+}
+// ====== SHOW INFORMATION DEVICE ======
+void handle_show_information_device(Database *db, const char *token, int sockfd)
+{
+    pthread_mutex_lock(&db_mutex);
+    int result = 0;
+    for (int i = 0; i < db->deviceCount; i++)
+    {
+        Device *dev = &db->devices[i];
+        if (strcmp(dev->auth.token, token) == 0)
+        {
+            result = is_device_type(db, token);
+            char out[512];
+            if (result == 1) // fan
+                snprintf(out, sizeof(out),
+                         "DEVICE ID: %s\r\nTYPE: %s\r\nNAME: %s\r\nPOWER: %s\r\nTIMER: %d minutes\r\nSPEED: %d\r\n",
+                         dev->deviceId,
+                         dev->type,
+                         dev->name,
+                         dev->state.power,
+                         dev->state.timer,
+                         dev->state.speed);
+            else if (result == 2) // ac
+                snprintf(out, sizeof(out),
+                         "DEVICE ID: %s\r\nTYPE: %s\r\nNAME: %s\r\nPOWER: %s\r\nTIMER: %d minutes\r\nMODE: %s\r\nTEMPERATURE: %d °C\r\n",
+                         dev->deviceId,
+                         dev->type,
+                         dev->name,
+                         dev->state.power,
+                         dev->state.timer,
+                         dev->state.mode,
+                         dev->state.temperature);
+            else // light
+                snprintf(out, sizeof(out),
+                         "DEVICE ID: %s\r\nTYPE: %s\r\nNAME: %s\r\nPOWER: %s\r\nTIMER: %d minutes\r\n",
+                         dev->deviceId,
+                         dev->type,
+                         dev->name,
+                         dev->state.power,
+                         dev->state.timer);
             pthread_mutex_unlock(&db_mutex);
             send(sockfd, out, strlen(out), 0);
             send(sockfd, "END\r\n", 5, 0);
@@ -776,13 +902,6 @@ ssize_t recv_line(int sock, RecvContext *ctx, char *buf, size_t maxlen)
 
         ctx->internal_len += n;
     }
-}
-/* Send a reply code to the client */
-void send_reply(int sock, const char *code)
-{
-    char out[64];
-    snprintf(out, sizeof(out), "%s\r\n", code);
-    send(sock, out, strlen(out), 0);
 }
 void handle_scan_struct(int sock, Database *db)
 {
@@ -882,7 +1001,7 @@ void handle_connect(int sockfd, Database *db, const char *line)
 
 void handle_pass(int sockfd, Database *db, const char *line)
 {
-    char token[64], oldp[64], newp[64];
+    char token[64], oldp[64], newp[64], logbuf[64];
 
     if (sscanf(line + 5, "%63s %63s", token, newp) != 2)
     {
@@ -902,6 +1021,8 @@ void handle_pass(int sockfd, Database *db, const char *line)
     // ---- Authentication success ----
 
     strcpy(d->auth.password, newp);
+    snprintf(logbuf, sizeof(logbuf), "PASSWORD CHANGED"); // add log
+    add_log(d, logbuf);
     save_database(db);
     pthread_mutex_unlock(&db_mutex);
     send_reply(sockfd, "210"); // Success - password changed
@@ -969,15 +1090,15 @@ void handle_init(int sockfd, Database *db, const char *line)
         strcpy(new_dev->state.mode, "null");
     }
     // null
-
-    // Power Usage mặc định
-    // new_dev->powerUsage.currentWatt = 0;
-    // new_dev->powerUsage.day = 0;
-    // new_dev->powerUsage.month = 0;
-    // new_dev->powerUsage.year = 0;
-
-    // // Log khởi tạo
-    // new_dev->logCount = 0;
+    time_t now = time(NULL);
+    struct tm *tm_now = localtime(&now);
+    new_dev->powerUsage.currentWatt = 0;
+    new_dev->powerUsage.usageHistory.day = 0;
+    new_dev->powerUsage.usageHistory.month = 0;
+    new_dev->powerUsage.usageHistory.year = 0;
+    new_dev->powerUsage.lastDay = tm_now ? tm_now->tm_mday : 1;
+    new_dev->powerUsage.lastMonth = tm_now ? tm_now->tm_mon + 1 : 1;
+    new_dev->powerUsage.lastYear = tm_now ? tm_now->tm_year + 1900 : 1970;
 
     db->deviceCount++;
 
@@ -1128,6 +1249,18 @@ void *client_thread(void *arg)
             {
                 handle_mode_device(db, token, mode, sockfd);
                 save_database(db);
+            }
+            else
+            {
+                send_reply(sockfd, "203"); // invalid format
+            }
+        }
+        else if (strncmp(line, "SHOW INFO", 9) == 0)
+        {
+            char token[128];
+            if (sscanf(line, "SHOW INFO %127s", token) == 1)
+            {
+                handle_show_information_device(db, token, sockfd);
             }
             else
             {
