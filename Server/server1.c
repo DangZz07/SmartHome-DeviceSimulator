@@ -1030,10 +1030,11 @@ void handle_pass(int sockfd, Database *db, const char *line)
 
 void handle_init(int sockfd, Database *db, const char *line)
 {
-    char id[64], pass[64], type[32];
+    char id[64], pass[64], type[32], name[128];
 
-    // Bóc tách: INIT <ID> <PASS> <TYPE>
-    if (sscanf(line + 5, "%63s %63s %31s", id, pass, type) != 3)
+    // INIT <ID> <PASS> <TYPE> <NAME>
+    if (sscanf(line + 5, "%63s %63s %31s %127s",
+               id, pass, type, name) != 4)
     {
         send_reply(sockfd, "203"); // Invalid format
         return;
@@ -1041,74 +1042,73 @@ void handle_init(int sockfd, Database *db, const char *line)
 
     pthread_mutex_lock(&db_mutex);
 
-    // 1. Kiểm tra xem Device ID đã tồn tại trong DB chưa
+    // 1. Check duplicate ID
     for (int i = 0; i < db->deviceCount; i++)
     {
         if (strcmp(db->devices[i].deviceId, id) == 0)
         {
-            send_reply(sockfd, "221"); // ID already exists (mượn mã 221 hoặc mã lỗi riêng)
+            send_reply(sockfd, "221");
             pthread_mutex_unlock(&db_mutex);
             return;
         }
     }
 
-    // 2. Tạo thiết bị mới (Giả sử db->devices là mảng struct)
     Device *new_dev = &db->devices[db->deviceCount];
 
     strcpy(new_dev->deviceId, id);
     strcpy(new_dev->type, type);
-    strcpy(new_dev->name, id); // Mặc định tên giống ID
+    strcpy(new_dev->name, name); // 
 
     // Auth
     strcpy(new_dev->auth.password, pass);
     new_dev->auth.connected = false;
-    strcpy(new_dev->auth.token, ""); // Chưa có token khi chưa connect
+    new_dev->auth.token[0] = '\0';
 
-    // State mặc định dựa trên TYPE
+    // Power default
     strcpy(new_dev->state.power, "OFF");
     new_dev->state.timer = 0;
 
-    // Logic gán giá trị mặc định theo loại
-    if (strcasecmp(type, "fan") == 0)
+    // Speed
+    if (strcasecmp(type, "FAN") == 0)
+        new_dev->state.speed = 1;
+    else
+        new_dev->state.speed = -1;
+
+    // AC
+    if (strcasecmp(type, "AC") == 0)
     {
-        new_dev->state.speed = 1; // Quạt mặc định số 1
+        new_dev->state.temperature = 24;
+        strcpy(new_dev->state.mode, "cool");
     }
     else
     {
-        new_dev->state.speed = -1; // -1 đại diện cho null (không hỗ trợ)
-    }
-
-    if (strcasecmp(type, "ac") == 0)
-    {
-        new_dev->state.temperature = 24;     // AC mặc định 24 độ
-        strcpy(new_dev->state.mode, "cool"); // Chế độ mặc định là làm mát
-    }
-    else
-    {
-
-        new_dev->state.temperature = -1; // null
+        new_dev->state.temperature = -1;
         strcpy(new_dev->state.mode, "null");
     }
-    // null
+
+    // Power usage
     time_t now = time(NULL);
     struct tm *tm_now = localtime(&now);
+
     new_dev->powerUsage.currentWatt = 0;
     new_dev->powerUsage.usageHistory.day = 0;
     new_dev->powerUsage.usageHistory.month = 0;
     new_dev->powerUsage.usageHistory.year = 0;
+
     new_dev->powerUsage.lastDay = tm_now ? tm_now->tm_mday : 1;
     new_dev->powerUsage.lastMonth = tm_now ? tm_now->tm_mon + 1 : 1;
     new_dev->powerUsage.lastYear = tm_now ? tm_now->tm_year + 1900 : 1970;
 
     db->deviceCount++;
-
-    save_database(db); // Lưu lại file JSON
+    save_database(db);
 
     pthread_mutex_unlock(&db_mutex);
 
-    send_reply(sockfd, "200"); // Success
-    printf("Server: Created new device %s (type: %s)\n", id, type);
+    send_reply(sockfd, "200");
+    printf("Server: Created device %s (%s) name=%s\n",
+           id, type, name);
 }
+
 
 void *client_thread(void *arg)
 {

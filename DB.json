@@ -57,9 +57,9 @@
 			"powerUsage":	{
 				"currentWatt":	350,
 				"usageHistory":	{
-					"day":	14.398333333333339,
-					"month":	52.1983333333335,
-					"year":	422.09833333333262
+					"day":	14.474166666666672,
+					"month":	52.274166666666858,
+					"year":	422.174166666666
 				}
 			},
 			"logs":	[{
@@ -100,9 +100,9 @@
 			"powerUsage":	{
 				"currentWatt":	900,
 				"usageHistory":	{
-					"day":	119.11000000000004,
-					"month":	119.11000000000004,
-					"year":	119.11000000000004
+					"day":	119.30500000000005,
+					"month":	119.30500000000005,
+					"year":	119.30500000000005
 				}
 			},
 			"logs":	[{
@@ -162,9 +162,9 @@
 			"powerUsage":	{
 				"currentWatt":	100,
 				"usageHistory":	{
-					"day":	0.12333333333333317,
-					"month":	0.12333333333333317,
-					"year":	0.12333333333333317
+					"day":	0.145,
+					"month":	0.145,
+					"year":	0.145
 				}
 			},
 			"logs":	[{
@@ -189,6 +189,81 @@
 				"speed":	1,
 				"mode":	"null",
 				"temperature":	null
+			},
+			"powerUsage":	{
+				"currentWatt":	0,
+				"usageHistory":	{
+					"day":	0,
+					"month":	0,
+					"year":	0
+				}
+			},
+			"logs":	[]
+		}, {
+			"deviceId":	"DEV_007",
+			"type":	"LIGHT",
+			"name":	"DEV_007",
+			"auth":	{
+				"password":	"1",
+				"connected":	false,
+				"Token":	""
+			},
+			"state":	{
+				"power":	"OFF",
+				"timer":	0,
+				"speed":	null,
+				"mode":	"null",
+				"temperature":	null
+			},
+			"powerUsage":	{
+				"currentWatt":	0,
+				"usageHistory":	{
+					"day":	0,
+					"month":	0,
+					"year":	0
+				}
+			},
+			"logs":	[]
+		}, {
+			"deviceId":	"DEV_008",
+			"type":	"AC",
+			"name":	"DEV_008",
+			"auth":	{
+				"password":	"1",
+				"connected":	false,
+				"Token":	""
+			},
+			"state":	{
+				"power":	"OFF",
+				"timer":	0,
+				"speed":	null,
+				"mode":	"cool",
+				"temperature":	24
+			},
+			"powerUsage":	{
+				"currentWatt":	0,
+				"usageHistory":	{
+					"day":	0,
+					"month":	0,
+					"year":	0
+				}
+			},
+			"logs":	[]
+		}, {
+			"deviceId":	"DEV_009",
+			"type":	"AC",
+			"name":	"super_device",
+			"auth":	{
+				"password":	"1",
+				"connected":	false,
+				"Token":	""
+			},
+			"state":	{
+				"power":	"OFF",
+				"timer":	0,
+				"speed":	null,
+				"mode":	"cool",
+				"temperature":	24
 			},
 			"powerUsage":	{
 				"currentWatt":	0,

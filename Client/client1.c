@@ -254,8 +254,10 @@ char *find_scan_token(const char *id)
 }
 void handle_init_device(int sock)
 {
-    char id[64], pass[64], type[32];
-    char cmd[256], response[BUF_SIZE];
+    char id[64], pass[64], name[128];
+    char type[16];
+    char cmd[512], response[BUF_SIZE];
+    char choice[8];
 
     printf("\n----- Initialize New Device -----\n");
 
@@ -267,22 +269,42 @@ void handle_init_device(int sock)
     fgets(pass, sizeof(pass), stdin);
     pass[strcspn(pass, "\n")] = 0;
 
-    printf("Enter Device Type (LIGHT / FAN / AC): ");
-    fgets(type, sizeof(type), stdin);
-    type[strcspn(type, "\n")] = 0;
+    printf("Enter Device Name (no space): ");
+    fgets(name, sizeof(name), stdin);
+    name[strcspn(name, "\n")] = 0;
 
-    // Tạo lệnh theo protocol: INIT <ID> <PW> <TYPE>\r\n
-    snprintf(cmd, sizeof(cmd), "INIT %s %s %s\r\n", id, pass, type);
+    printf("Select Device Type:\n");
+    printf("1. LIGHT\n");
+    printf("2. FAN\n");
+    printf("3. AC\n");
+    printf("Choose: ");
+    fgets(choice, sizeof(choice), stdin);
 
-    // Gửi đến Server
+    if (choice[0] == '1')
+        strcpy(type, "LIGHT");
+    else if (choice[0] == '2')
+        strcpy(type, "FAN");
+    else if (choice[0] == '3')
+        strcpy(type, "AC");
+    else
+    {
+        printf("Invalid device type!\n");
+        return;
+    }
+
+    // INIT <ID> <PASS> <TYPE> <NAME>
+    snprintf(cmd, sizeof(cmd),
+             "INIT %s %s %s %s\r\n",
+             id, pass, type, name);
+
     send(sock, cmd, strlen(cmd), 0);
 
-    // Nhận phản hồi dùng hàm receive_line (buffer-based) đã sửa ở trên
     if (receive_line(sock, response, sizeof(response)))
     {
-        interpret_response(response); // In ra "SUCCESS" hoặc lỗi dựa trên mã code
+        interpret_response(response);
     }
 }
+
 
 /* ================= HOME ================= */
 void show_home_menu()
