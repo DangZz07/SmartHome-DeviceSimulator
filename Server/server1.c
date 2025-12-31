@@ -401,6 +401,24 @@ int save_database(Database *db)
     return 1;
 }
 
+Device *find_device_byId(Database *db, const char *id)
+{
+    for (int i = 0; i < db->deviceCount; i++)
+    {
+        if (strcmp(db->devices[i].deviceId, id) == 0)
+            return &db->devices[i];
+    }
+    return NULL;
+}
+Device *find_device_byToken(Database *db, const char *token)
+{
+    for (int i = 0; i < db->deviceCount; i++)
+    {
+        if (strcmp(db->devices[i].auth.token, token) == 0)
+            return &db->devices[i];
+    }
+    return NULL;
+}
 // ====== ADD LOG ======
 void add_log(Device *dev, const char *text)
 {
@@ -458,8 +476,13 @@ void *timer_thread(void *arg)
                 {
                     printf("[Timer] %s: Timer expired! Action completed.\n",
                            dev->deviceId);
-                    // Tắt thiết bị khi timer hết
-                    strcpy(dev->state.power, "OFF");
+                    // Tắt hoặc bật thiết bị khi timer hết
+                    if (strcmp(dev->state.power, "OFF") == 0)
+                        strcpy(dev->state.power, "ON");
+                    else
+                    {
+                        strcpy(dev->state.power, "OFF");
+                    }
                     char logbuf[128];
                     snprintf(logbuf, sizeof(logbuf), "POWER OFF SPEED %d MODE %s TEMPERATURE %d", dev->state.speed, dev->state.mode, dev->state.temperature); // add log
                     add_log(dev, logbuf);
@@ -570,6 +593,8 @@ void send_reply(int sock, const char *code)
 // ====== GET CURRENT HOME ======
 Home *get_current_home(Database *db)
 {
+    if (!db || db->homeCount <= 0)
+        return NULL;
     if (db->currentHome < 0 || db->currentHome >= db->homeCount)
         db->currentHome = 0;
     return &db->homes[db->currentHome];
@@ -621,6 +646,20 @@ void handle_add_device(Database *db, const char *deviceId, const char *roomId, i
     pthread_mutex_lock(&db_mutex);
 
     Home *cur = get_current_home(db);
+    if (!cur)
+    {
+        pthread_mutex_unlock(&db_mutex);
+        send_reply(sockfd, "500");
+        return;
+    }
+
+    Device *dev = find_device_byId(db, deviceId);
+    if (!dev)
+    {
+        pthread_mutex_unlock(&db_mutex);
+        send_reply(sockfd, "404"); // device not found in device list
+        return;
+    }
 
     Room *targetRoom = NULL;
     for (int i = 0; i < cur->roomCount; i++)
@@ -657,8 +696,8 @@ void handle_add_device(Database *db, const char *deviceId, const char *roomId, i
             }
         }
     }
-
     strncpy(targetRoom->deviceIds[targetRoom->deviceCount], deviceId, sizeof(targetRoom->deviceIds[targetRoom->deviceCount]) - 1);
+    targetRoom->deviceIds[targetRoom->deviceCount][sizeof(targetRoom->deviceIds[targetRoom->deviceCount]) - 1] = '\0';
     targetRoom->deviceCount++;
 
     save_database(db);
@@ -669,7 +708,7 @@ void handle_add_device(Database *db, const char *deviceId, const char *roomId, i
 void handle_delete_device(Database *db, const char *deviceId, int sockfd)
 {
     pthread_mutex_lock(&db_mutex);
-    //Xoa device khoi Devices list
+    // Xoa device khoi Devices list
     int devIndex = -1;
     for (int i = 0; i < db->deviceCount; i++)
     {
@@ -687,7 +726,7 @@ void handle_delete_device(Database *db, const char *deviceId, int sockfd)
         }
         db->deviceCount--;
     }
-    //xoa device khoi room
+    // xoa device khoi room
     Home *cur = get_current_home(db);
     Room *targetRoom = NULL;
     int deviceIndex = -1;
@@ -875,7 +914,7 @@ void handle_show_room(Database *db, const char *roomId, int sock)
         }
     }
     pthread_mutex_unlock(&db_mutex);
-    send(sock, "404\r\n", 5, 0);
+    send(sock, "1000\r\n", 6, 0); // room not found
     send(sock, "END\r\n", 5, 0);
 }
 // ====== CHECK TYPE DEVICE ======
@@ -887,7 +926,7 @@ int is_device_type(Database *db, const char *token)
         Device *dev = &db->devices[i];
         if (strcmp(dev->auth.token, token) == 0)
         {
-            if (strcmp(dev->type, "fan") == 0 || strcmp(dev->type, "Fan") == 0)
+            if (strcmp(dev->type, "FAN") == 0 || strcmp(dev->type, "fan") == 0)
                 result = 1;
             else if (strcmp(dev->type, "AC") == 0 || strcmp(dev->type, "ac") == 0)
                 result = 2;
@@ -939,6 +978,13 @@ void handle_speed_device(Database *db, const char *token, int speed, int sockfd)
                 pthread_mutex_unlock(&db_mutex);
                 send_reply(sockfd, "405"); // device not support speed
                 return;
+            }
+            else if (speed == 0)
+            {
+                dev->state.speed = speed;
+                strcpy(dev->state.power, "OFF");
+                snprintf(logbuf, sizeof(logbuf), "POWER %s SPEED %d MODE %s TEMPERATURE %d TIMER %d", dev->state.power, speed, dev->state.mode, dev->state.temperature, dev->state.timer); // add log
+                add_log(dev, logbuf);
             }
             else if (speed < 0 || speed > 3)
             {
@@ -1244,25 +1290,6 @@ void handle_scan_struct(int sock, Database *db)
     send(sock, "END\r\n", 5, 0);
 }
 
-Device *find_device_byId(Database *db, const char *id)
-{
-    for (int i = 0; i < db->deviceCount; i++)
-    {
-        if (strcmp(db->devices[i].deviceId, id) == 0)
-            return &db->devices[i];
-    }
-    return NULL;
-}
-Device *find_device_byToken(Database *db, const char *token)
-{
-    for (int i = 0; i < db->deviceCount; i++)
-    {
-        if (strcmp(db->devices[i].auth.token, token) == 0)
-            return &db->devices[i];
-    }
-    return NULL;
-}
-
 void handle_connect(int sockfd, Database *db, const char *line)
 {
     char id[64], pass[64];
@@ -1371,7 +1398,7 @@ void handle_init(int sockfd, Database *db, const char *line)
 
     strcpy(new_dev->deviceId, id);
     strcpy(new_dev->type, type);
-    strcpy(new_dev->name, name); // 
+    strcpy(new_dev->name, name); //
 
     // Auth
     strcpy(new_dev->auth.password, pass);
@@ -1422,7 +1449,6 @@ void handle_init(int sockfd, Database *db, const char *line)
     printf("Server: Created device %s (%s) name=%s\n",
            id, type, name);
 }
-
 
 void *client_thread(void *arg)
 {

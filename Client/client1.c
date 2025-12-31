@@ -23,6 +23,7 @@ Screen previous_screen = SCREEN_HOME; // chi dung cho back tu device ve show roo
 /* ===== DEVICE STATE ===== */
 char current_device_id[64] = "";
 char current_token[64] = "";
+char current_device_type[32] = "";
 int device_connected = 0;
 
 /* ===== SCAN TOKEN CACHE ===== */
@@ -30,6 +31,7 @@ typedef struct
 {
     char id[64];
     char token[64];
+    char type[32];
 } DeviceToken;
 
 DeviceToken scan_tokens[64];
@@ -139,14 +141,29 @@ int receive_line(int sock, char *buffer, size_t size)
 int receive_scan_until_end(int sock)
 {
     char line[BUF_SIZE];
+    memset(line, 0, sizeof(line));
+    int not_found = 0;
     while (1)
     {
         if (!receive_line(sock, line, sizeof(line)))
             return 0;
-        printf("%s\n", line);
+        // Server may return not-found as a single code line (e.g. 404) before END.
+        // Always drain until END to keep the stream aligned for the next request.
+        if (strcmp(line, "1000") == 0)
+        {
+            not_found = 1;
+            printf("ROOM NOT FOUND\n");
+        }
+        else
+        {
+            printf("%s\n", line);
+        }
+
         if (strcmp(line, "END") == 0)
             break;
     }
+    if (not_found == 1)
+        return 0;
     return 1;
 }
 
@@ -194,6 +211,7 @@ int receive_scan_until_end2(int sock)
                 // lưu token
                 strcpy(scan_tokens[scan_token_count].id, id);
                 strcpy(scan_tokens[scan_token_count].token, token);
+                strcpy(scan_tokens[scan_token_count].type, type);
                 scan_token_count++;
 
                 // in KHÔNG token
@@ -242,11 +260,22 @@ void receive_scan_until_end3(int sock) // dung khi trong enter show home
                 // lưu token
                 strcpy(scan_tokens[scan_token_count].id, id);
                 strcpy(scan_tokens[scan_token_count].token, token);
+                strcpy(scan_tokens[scan_token_count].type, type);
                 scan_token_count++;
             }
         }
     }
     return;
+}
+
+char *find_scan_type(const char *id)
+{
+    for (int i = 0; i < scan_token_count; i++)
+    {
+        if (strcmp(scan_tokens[i].id, id) == 0)
+            return scan_tokens[i].type;
+    }
+    return NULL;
 }
 
 char *find_scan_token(const char *id)
@@ -295,21 +324,38 @@ void handle_select_home_name(int sock)
     char homeName[128];
     char cmd[256];
     char line[BUF_SIZE];
-
-    printf("Enter Home name to select (no spaces, use _): ");
-    fgets(homeName, sizeof(homeName), stdin);
-    homeName[strcspn(homeName, "\n")] = 0;
-
-    if (homeName[0] == '\0')
+    while (1)
     {
-        printf("Invalid value!\n");
-        return;
-    }
+        printf("Enter Home name to select (no spaces, use _) (0 to back): ");
+        fgets(homeName, sizeof(homeName), stdin);
+        homeName[strcspn(homeName, "\n")] = 0;
 
-    snprintf(cmd, sizeof(cmd), "SET HOME %s\r\n", homeName);
-    send(sock, cmd, strlen(cmd), 0);
-    receive_line(sock, line, sizeof(line));
-    interpret_response(line);
+        if (strcmp(homeName, "0") == 0)
+        {
+            return;
+        }
+        if (homeName[0] == '\0')
+        {
+            printf("Invalid value! Please try again.\n");
+            continue;
+        }
+
+        snprintf(cmd, sizeof(cmd), "SET HOME %s\r\n", homeName);
+        send(sock, cmd, strlen(cmd), 0);
+
+        if (!receive_line(sock, line, sizeof(line)))
+        {
+            printf("Connection lost.\n");
+            return;
+        }
+        interpret_response(line);
+
+        // Keep prompting until server confirms success.
+        if (strncmp(line, "200", 3) == 0)
+        {
+            return;
+        }
+    }
 }
 
 void handle_add_home(int sock)
@@ -413,7 +459,6 @@ void handle_init_device(int sock)
     }
 }
 
-
 /* ================= HOME ================= */
 void show_home_menu()
 {
@@ -443,6 +488,7 @@ void enter_show_room(int sock)
     }
 
     char *tk = find_scan_token(device_id);
+    char *tp = find_scan_type(device_id);
     if (!tk)
     {
         printf("Device not found or not connected!\n");
@@ -453,6 +499,7 @@ void enter_show_room(int sock)
     // thiet bi hop le
     strcpy(current_token, tk);
     strcpy(current_device_id, device_id);
+    strcpy(current_device_type, tp);
     device_connected = 1;
 
     previous_screen = SCREEN_SHOW_ROOM;
@@ -515,19 +562,30 @@ void enter_show_home(int sock)
 
     // neu chon 1
     char roomId[64], cmd[128];
-    printf("\nEnter Room ID (0 to back): ");
-    fgets(roomId, sizeof(roomId), stdin);
-    roomId[strcspn(roomId, "\n")] = 0;
+    while (1)
+    {
+        printf("\nEnter Room ID (0 to back): ");
+        fgets(roomId, sizeof(roomId), stdin);
+        roomId[strcspn(roomId, "\n")] = 0;
 
-    snprintf(cmd, sizeof(cmd), "SHOW ROOM %s\r\n", roomId);
-    if(roomId[0] == '\0'|| strcmp(roomId, "0") == 0){
-        current_screen = SCREEN_SHOW_HOME;
-        return;
+        if (strcmp(roomId, "0") == 0)
+        {
+            current_screen = SCREEN_SHOW_HOME;
+            return;
+        }
+        else if (strcmp(roomId, "") == 0)
+        {
+            printf("Invalid Room ID. Please try again.\n");
+            continue;
+        }
+        snprintf(cmd, sizeof(cmd), "SHOW ROOM %s\r\n", roomId);
+        send(sock, cmd, strlen(cmd), 0);
+        int result = receive_scan_until_end(sock);
+        if (result)
+            break;
     }
-    send(sock, cmd, strlen(cmd), 0);
-    receive_scan_until_end(sock);
-
-    printf("\n====== ROOM ======\n");
+    // lay ten room de hien thi
+    printf("\n====== %s ======\n", roomId);
     printf("0. Back\n");
     printf("1. Manage Device\n");
     printf("2. Add Device\n");
@@ -616,6 +674,12 @@ void handle_scan()
     strcpy(current_device_id, id);
 
     char *tk = find_scan_token(id);
+    char *tp = find_scan_type(id);
+
+    if (tp)
+    {
+        strcpy(current_device_type, tp);
+    }
     if (tk)
     {
         // MY DEVICE
@@ -636,7 +700,7 @@ void handle_scan()
 void show_device_menu()
 {
     printf("\n====== DEVICE ======\n");
-    printf("Device: %s\n", current_device_id);
+    printf("Device: %s || %s\n", current_device_id, current_device_type);
 
     if (!device_connected)
     {
@@ -647,7 +711,7 @@ void show_device_menu()
         printf("2. Power\n");
         printf("3. Change Password\n");
         printf("4. Timer\n");
-        printf("5. Speed\n");
+        printf("5. Speed(Only on FAN)\n");
         printf("6. Temperature\n");
         printf("7. Mode(Only on AC)\n");
         printf("8. Power Usage\n");
@@ -688,15 +752,28 @@ void handle_connect(int sock)
 /* ================= POWER ================= */
 void handle_power(int sock)
 {
-    char c[8], cmd[128], line[BUF_SIZE];
-    printf("1. ON\n2. OFF\nChoose: ");
-    fgets(c, sizeof(c), stdin);
-
-    snprintf(cmd, sizeof(cmd),
-             "POWER %s %s\r\n",
-             current_token,
-             (c[0] == '1') ? "ON" : "OFF");
-
+    char c[8], cmd[128], line[BUF_SIZE], action[8];
+    while (1)
+    {
+        printf("1. ON\n2. OFF\nChoose: ");
+        fgets(c, sizeof(c), stdin);
+        if (c[0] == '1')
+        {
+            strcpy(action, "ON");
+            break;
+        }
+        else if (c[0] == '2')
+        {
+            strcpy(action, "OFF");
+            break;
+        }
+        else
+        {
+            printf("Invalid choice!. Please choose 1 or 2.\n");
+            continue;
+        }
+    }
+    snprintf(cmd, sizeof(cmd), "POWER %s %s\r\n", current_token, action);
     send(sock, cmd, strlen(cmd), 0);
     receive_line(sock, line, sizeof(line));
     interpret_response(line);
@@ -712,25 +789,67 @@ void handle_timer(int sock)
     char response[BUF_SIZE];
     char choice[8];
 
-    printf("Nhap so phut hen gio: ");
-    fgets(minutes, sizeof(minutes), stdin);
-    minutes[strcspn(minutes, "\n")] = 0;
-
-    printf("Hanh dong khi het gio:\n");
-    printf("1. Bat (ON)\n");
-    printf("2. Tat (OFF)\n");
-    printf("Chon: ");
-    fgets(choice, sizeof(choice), stdin);
-
-    if (choice[0] == '1')
+    // check valid minutes
+    while (1)
     {
-        strcpy(action, "ON");
-    }
-    else
-    {
-        strcpy(action, "OFF");
-    }
+        printf("Enter timer duration in minutes (1-9999, 0 to cancel): ");
+        fgets(minutes, sizeof(minutes), stdin);
+        minutes[strcspn(minutes, "\n")] = 0;
 
+        if (strcmp(minutes, "0") == 0)
+        {
+            printf("Cancel timer.\n");
+            return;
+        }
+
+        // check numeric
+        int ok = 1;
+        for (int i = 0; minutes[i] != '\0'; i++)
+        {
+            if (minutes[i] < '0' || minutes[i] > '9')
+            {
+                ok = 0;
+                break;
+            }
+        }
+        if (!ok || minutes[0] == '\0')
+        {
+            printf("Invalid minutes. Please enter a number.\n");
+            continue;
+        }
+
+        int m = atoi(minutes);
+        if (m <= 0 || m > 9999)
+        {
+            printf("Invalid minutes range.\n");
+            continue;
+        }
+        break;
+    }
+    while (1)
+    {
+        printf("Action when timer ends:\n");
+        printf("1. ON\n");
+        printf("2. OFF\n");
+        printf("Choose: ");
+        fgets(choice, sizeof(choice), stdin);
+
+        if (choice[0] == '1')
+        {
+            strcpy(action, "ON");
+            break;
+        }
+        else if (choice[0] == '2')
+        {
+            strcpy(action, "OFF");
+            break;
+        }
+        else
+        {
+            printf("Invalid choice.Please choose 1 or 2.\n");
+            continue;
+        }
+    }
     sprintf(cmd, "TIMER %s %s %s\r\n", current_token, minutes, action);
 
     send(sock, cmd, strlen(cmd), 0);
@@ -747,7 +866,7 @@ void handle_speed(int sock)
     char cmd[256];
     char response[BUF_SIZE];
 
-    printf("Nhap toc do (0-3): ");
+    printf("Enter speed (1-3. 0 is OFF): ");
     fgets(speed, sizeof(speed), stdin);
     speed[strcspn(speed, "\n")] = 0;
 
@@ -766,7 +885,7 @@ void handle_temperature(int sock)
     char cmd[256];
     char response[BUF_SIZE];
 
-    printf("Nhap nhiet do mong muon: ");
+    printf("Enter temperature (16-30): ");
     fgets(temperature, sizeof(temperature), stdin);
     temperature[strcspn(temperature, "\n")] = 0;
 
@@ -785,11 +904,11 @@ void handle_mode(int sock)
     char cmd[256];
     char response[BUF_SIZE];
     char choice[8];
-    printf("Nhap che do: ");
+    printf("Enter mode: \n");
     printf("1. COOL❄️\n");
     printf("2. FAN🌀\n");
     printf("3. DRY💧\n");
-    printf("Chon: ");
+    printf("Choose: ");
     fgets(choice, sizeof(choice), stdin);
     if (choice[0] == '1')
     {

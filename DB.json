@@ -4,7 +4,11 @@
 			"rooms":	[{
 					"roomId":	"ROOM_01",
 					"roomName":	"Living_Room",
-					"devices":	["DEV_002"]
+					"devices":	["DEV_002", "DEV_008", "DEV_11"]
+				}, {
+					"roomId":	"huhu",
+					"roomName":	"nha_cua_toi",
+					"devices":	[]
 				}]
 		}, {
 			"homeName":	"Nha_2",
@@ -15,31 +19,52 @@
 				}, {
 					"roomId":	"ROOM_03",
 					"roomName":	"Kitchen",
-					"devices":	["DEV_006", "DEV_007"]
+					"devices":	["DEV_006", "DEV_007", "DEV_11"]
+				}, {
+					"roomId":	"asd",
+					"roomName":	"asd",
+					"devices":	[]
+				}]
+		}, {
+			"homeName":	"or:",
+			"rooms":	[]
+		}, {
+			"homeName":	"hehehe",
+			"rooms":	[{
+					"roomId":	"hihihi",
+					"roomName":	"hahaha",
+					"devices":	[]
+				}]
+		}, {
+			"homeName":	"Nha_3",
+			"rooms":	[{
+					"roomId":	"ROOM_04",
+					"roomName":	"phong_4",
+					"devices":	[]
 				}]
 		}],
 	"devices":	[{
 			"deviceId":	"DEV_002",
-			"type":	"fan",
+			"type":	"FAN",
 			"name":	"living_room_fan",
 			"auth":	{
-				"password":	"3",
+				"password":	"0",
 				"connected":	true,
 				"Token":	"76931FAC9DAB2B6"
 			},
 			"state":	{
 				"power":	"ON",
 				"timer":	0,
-				"speed":	2,
+				"speed":	0,
 				"mode":	null,
 				"temperature":	null
 			},
 			"powerUsage":	{
-				"currentWatt":	350,
+				"currentWatt":	0,
 				"usageHistory":	{
-					"day":	16.562499999999844,
-					"month":	54.362500000000836,
-					"year":	424.26249999999732
+					"day":	17.116666666666347,
+					"month":	54.916666666667652,
+					"year":	424.81666666666365
 				}
 			},
 			"logs":	[{
@@ -60,6 +85,51 @@
 				}, {
 					"time":	"2025-12-27 17:06:49",
 					"action":	"POWER ON SPEED 3 MODE  TEMPERATURE -1 TIMER 0"
+				}, {
+					"time":	"2025-12-31 15:11:44",
+					"action":	"POWER OFF SPEED 2 MODE  TEMPERATURE -1 TIMER 0"
+				}, {
+					"time":	"2025-12-31 15:20:15",
+					"action":	"POWER ON SPEED 2 MODE  TEMPERATURE -1 TIMER 0"
+				}, {
+					"time":	"2025-12-31 15:20:21",
+					"action":	"PASSWORD CHANGED"
+				}, {
+					"time":	"2025-12-31 15:24:28",
+					"action":	"POWER ON SPEED 2 MODE  TEMPERATURE -1 TIMER 1"
+				}, {
+					"time":	"2025-12-31 15:25:12",
+					"action":	"POWER OFF SPEED 2 MODE  TEMPERATURE -1"
+				}, {
+					"time":	"2025-12-31 15:45:13",
+					"action":	"POWER OFF SPEED 2 MODE  TEMPERATURE -1 TIMER 0"
+				}, {
+					"time":	"2025-12-31 15:45:34",
+					"action":	"POWER ON SPEED 2 MODE  TEMPERATURE -1 TIMER 0"
+				}, {
+					"time":	"2025-12-31 15:45:58",
+					"action":	"POWER ON SPEED 2 MODE  TEMPERATURE -1 TIMER 1"
+				}, {
+					"time":	"2025-12-31 15:46:46",
+					"action":	"POWER OFF SPEED 2 MODE  TEMPERATURE -1"
+				}, {
+					"time":	"2025-12-31 15:47:08",
+					"action":	"POWER ON SPEED 2 MODE  TEMPERATURE -1 TIMER 0"
+				}, {
+					"time":	"2025-12-31 15:47:11",
+					"action":	"POWER ON SPEED 0 MODE  TEMPERATURE -1 TIMER 0"
+				}, {
+					"time":	"2025-12-31 15:51:17",
+					"action":	"POWER ON SPEED 0 MODE  TEMPERATURE -1 TIMER 0"
+				}, {
+					"time":	"2025-12-31 15:52:43",
+					"action":	"POWER OFF SPEED 0 MODE  TEMPERATURE -1 TIMER 0"
+				}, {
+					"time":	"2025-12-31 15:53:06",
+					"action":	"POWER OFF SPEED 0 MODE  TEMPERATURE -1 TIMER 0"
+				}, {
+					"time":	"2025-12-31 15:54:32",
+					"action":	"POWER ON SPEED 0 MODE  TEMPERATURE -1 TIMER 0"
 				}]
 		}, {
 			"deviceId":	"DEV_003",
@@ -74,15 +144,15 @@
 				"power":	"ON",
 				"timer":	0,
 				"speed":	null,
-				"mode":	"FAN",
-				"temperature":	20
+				"mode":	"COOL",
+				"temperature":	30
 			},
 			"powerUsage":	{
-				"currentWatt":	900,
+				"currentWatt":	1800,
 				"usageHistory":	{
-					"day":	124.67500000000025,
-					"month":	124.67500000000025,
-					"year":	124.67500000000025
+					"day":	128.06500000000037,
+					"month":	128.06500000000037,
+					"year":	128.06500000000037
 				}
 			},
 			"logs":	[{
@@ -91,10 +161,43 @@
 				}, {
 					"time":	"2025-12-27 17:38:12",
 					"action":	"POWER ON SPEED 3 MODE FAN TEMPERATURE 20 TIMER 0"
+				}, {
+					"time":	"2025-12-31 13:29:27",
+					"action":	"POWER OFF SPEED -1 MODE FAN TEMPERATURE 20 TIMER 0"
+				}, {
+					"time":	"2025-12-31 13:31:23",
+					"action":	"PASSWORD CHANGED"
+				}, {
+					"time":	"2025-12-31 13:33:04",
+					"action":	"POWER OFF SPEED -1 MODE FAN TEMPERATURE 20 TIMER 2"
+				}, {
+					"time":	"2025-12-31 13:34:07",
+					"action":	"POWER OFF SPEED -1 MODE FAN TEMPERATURE 20"
+				}, {
+					"time":	"2025-12-31 13:37:22",
+					"action":	"POWER OFF SPEED -1 MODE FAN TEMPERATURE 20 TIMER 1"
+				}, {
+					"time":	"2025-12-31 13:38:17",
+					"action":	"POWER OFF SPEED -1 MODE FAN TEMPERATURE 20"
+				}, {
+					"time":	"2025-12-31 13:40:22",
+					"action":	"POWER ON SPEED -1 MODE FAN TEMPERATURE 20 TIMER 0"
+				}, {
+					"time":	"2025-12-31 13:43:01",
+					"action":	"POWER ON SPEED -1 MODE COOL TEMPERATURE 20 TIMER 0"
+				}, {
+					"time":	"2025-12-31 15:58:26",
+					"action":	"POWER ON SPEED -1 MODE COOL TEMPERATURE 16 TIMER 0"
+				}, {
+					"time":	"2025-12-31 15:58:39",
+					"action":	"POWER ON SPEED -1 MODE COOL TEMPERATURE 30 TIMER 0"
+				}, {
+					"time":	"2025-12-31 15:59:09",
+					"action":	"POWER ON SPEED -1 MODE COOL TEMPERATURE 30 TIMER 0"
 				}]
 		}, {
 			"deviceId":	"DEV_004",
-			"type":	"light",
+			"type":	"LIGHT",
 			"name":	"super_light",
 			"auth":	{
 				"password":	"123",
@@ -154,13 +257,63 @@
 			"name":	"DEV_007",
 			"auth":	{
 				"password":	"123456",
+				"connected":	true,
+				"Token":	"FAFED754D22D6E66"
+			},
+			"state":	{
+				"power":	"OFF",
+				"timer":	0,
+				"speed":	null,
+				"mode":	"null",
+				"temperature":	null
+			},
+			"powerUsage":	{
+				"currentWatt":	0,
+				"usageHistory":	{
+					"day":	0,
+					"month":	0,
+					"year":	0
+				}
+			},
+			"logs":	[]
+		}, {
+			"deviceId":	"DEV_008",
+			"type":	"AC",
+			"name":	"device_ttt",
+			"auth":	{
+				"password":	"123",
+				"connected":	true,
+				"Token":	"54B233723E67A569"
+			},
+			"state":	{
+				"power":	"OFF",
+				"timer":	0,
+				"speed":	null,
+				"mode":	"cool",
+				"temperature":	24
+			},
+			"powerUsage":	{
+				"currentWatt":	0,
+				"usageHistory":	{
+					"day":	0,
+					"month":	0,
+					"year":	0
+				}
+			},
+			"logs":	[]
+		}, {
+			"deviceId":	"DEV_009",
+			"type":	"FAN",
+			"name":	"test",
+			"auth":	{
+				"password":	"1",
 				"connected":	false,
 				"Token":	""
 			},
 			"state":	{
 				"power":	"OFF",
 				"timer":	0,
-				"speed":	null,
+				"speed":	1,
 				"mode":	"null",
 				"temperature":	null
 			},
