@@ -1,44 +1,24 @@
 {
-	"home":	{
-		"homeName":	"My Home",
-		"rooms":	[{
-				"roomId":	"ROOM_01",
-				"roomName":	"Living_Room",
-				"devices":	["DEV_001", "DEV_002"]
-			}]
-	},
-	"devices":	[{
-			"deviceId":	"DEV_001",
-			"type":	"light",
-			"name":	"living_room_light",
-			"auth":	{
-				"password":	"1",
-				"connected":	true,
-				"Token":	"76931FAC9DAB2B3"
-			},
-			"state":	{
-				"power":	"OFF",
-				"timer":	0,
-				"speed":	null,
-				"mode":	null,
-				"temperature":	null
-			},
-			"powerUsage":	{
-				"currentWatt":	0,
-				"usageHistory":	{
-					"day":	4.5333333333333323,
-					"month":	23.833333333333353,
-					"year":	204.03333333333316
-				}
-			},
-			"logs":	[{
-					"time":	"2025-12-27 17:06:03",
-					"action":	"POWER SET ON SPEED -1 MODE  TEMPERATURE -1 TIMER 0"
-				}, {
-					"time":	"2025-12-27 17:06:17",
-					"action":	"POWER SET OFF SPEED -1 MODE  TEMPERATURE -1 TIMER 0"
+	"home":	[{
+			"homeName":	"Nha_1",
+			"rooms":	[{
+					"roomId":	"ROOM_01",
+					"roomName":	"Living_Room",
+					"devices":	["DEV_002"]
 				}]
 		}, {
+			"homeName":	"Nha_2",
+			"rooms":	[{
+					"roomId":	"ROOM_02",
+					"roomName":	"Bed_room",
+					"devices":	["DEV_003", "DEV_004"]
+				}, {
+					"roomId":	"ROOM_03",
+					"roomName":	"Kitchen",
+					"devices":	["DEV_006", "DEV_007"]
+				}]
+		}],
+	"devices":	[{
 			"deviceId":	"DEV_002",
 			"type":	"fan",
 			"name":	"living_room_fan",
@@ -57,9 +37,9 @@
 			"powerUsage":	{
 				"currentWatt":	350,
 				"usageHistory":	{
-					"day":	14.398333333333339,
-					"month":	52.1983333333335,
-					"year":	422.09833333333262
+					"day":	16.556666666666512,
+					"month":	54.3566666666675,
+					"year":	424.256666666664
 				}
 			},
 			"logs":	[{
@@ -100,9 +80,9 @@
 			"powerUsage":	{
 				"currentWatt":	900,
 				"usageHistory":	{
-					"day":	119.11000000000004,
-					"month":	119.11000000000004,
-					"year":	119.11000000000004
+					"day":	124.66000000000025,
+					"month":	124.66000000000025,
+					"year":	124.66000000000025
 				}
 			},
 			"logs":	[{
@@ -144,49 +124,43 @@
 					"action":	"POWER OFF SPEED -1 MODE  TEMPERATURE -1 TIMER 0"
 				}]
 		}, {
-			"deviceId":	"DEV_005",
-			"type":	"LIGHT",
-			"name":	"DEV_005",
-			"auth":	{
-				"password":	"123",
-				"connected":	true,
-				"Token":	"80C9C44E0B3A60FE"
-			},
-			"state":	{
-				"power":	"ON",
-				"timer":	0,
-				"speed":	null,
-				"mode":	"null",
-				"temperature":	null
-			},
-			"powerUsage":	{
-				"currentWatt":	100,
-				"usageHistory":	{
-					"day":	0.12333333333333317,
-					"month":	0.12333333333333317,
-					"year":	0.12333333333333317
-				}
-			},
-			"logs":	[{
-					"time":	"2025-12-27 17:41:05",
-					"action":	"POWER OFF SPEED -1 MODE null TEMPERATURE -1 TIMER 0"
-				}, {
-					"time":	"2025-12-27 17:41:07",
-					"action":	"POWER ON SPEED -1 MODE null TEMPERATURE -1 TIMER 0"
-				}]
-		}, {
 			"deviceId":	"DEV_006",
 			"type":	"FAN",
 			"name":	"DEV_006",
 			"auth":	{
 				"password":	"1",
+				"connected":	true,
+				"Token":	"0CE5353DFE9CDEB7"
+			},
+			"state":	{
+				"power":	"OFF",
+				"timer":	0,
+				"speed":	1,
+				"mode":	"null",
+				"temperature":	null
+			},
+			"powerUsage":	{
+				"currentWatt":	0,
+				"usageHistory":	{
+					"day":	0,
+					"month":	0,
+					"year":	0
+				}
+			},
+			"logs":	[]
+		}, {
+			"deviceId":	"DEV_007",
+			"type":	"LIGHT",
+			"name":	"DEV_007",
+			"auth":	{
+				"password":	"123456",
 				"connected":	false,
 				"Token":	""
 			},
 			"state":	{
 				"power":	"OFF",
 				"timer":	0,
-				"speed":	1,
+				"speed":	null,
 				"mode":	"null",
 				"temperature":	null
 			},

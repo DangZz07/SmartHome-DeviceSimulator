@@ -81,6 +81,13 @@ typedef struct
     char homeName[128];
     Room rooms[32];
     int roomCount;
+} Home;
+
+typedef struct
+{
+    Home homes[16];
+    int homeCount;
+    int currentHome;
 
     Device devices[128];
     int deviceCount;
@@ -130,35 +137,80 @@ int load_database(Database *db)
         return 0;
     }
 
+    // Reset db before loading
+    memset(db, 0, sizeof(*db));
+    db->currentHome = 0;
+
     time_t now = time(NULL);
     struct tm *tm_now = localtime(&now);
     int today = tm_now ? tm_now->tm_mday : 1;
     int thisMonth = tm_now ? tm_now->tm_mon + 1 : 1;
     int thisYear = tm_now ? tm_now->tm_year + 1900 : 1970;
 
-    // -------- HOME --------
-    cJSON *home = cJSON_GetObjectItem(root, "home");
-    strcpy(db->homeName, cJSON_GetObjectItem(home, "homeName")->valuestring);
+    // -------- HOME(S) --------
+    cJSON *homeNode = cJSON_GetObjectItem(root, "home");
+    int homeN = cJSON_GetArraySize(homeNode);
+    int maxHomes = (int)(sizeof(db->homes) / sizeof(db->homes[0]));
+    if (homeN > maxHomes)
+        homeN = maxHomes;
 
-    // -------- ROOMS --------
-    cJSON *rooms = cJSON_GetObjectItem(home, "rooms");
-    db->roomCount = cJSON_GetArraySize(rooms);
-
-    for (int i = 0; i < db->roomCount; i++)
+    db->homeCount = homeN;
+    for (int hi = 0; hi < homeN; hi++)
     {
-        cJSON *room = cJSON_GetArrayItem(rooms, i);
+        cJSON *homeObj = cJSON_GetArrayItem(homeNode, hi);
+        Home *h = &db->homes[hi];
 
-        Room *r = &db->rooms[i];
-        strcpy(r->roomId, cJSON_GetObjectItem(room, "roomId")->valuestring);
-        strcpy(r->roomName, cJSON_GetObjectItem(room, "roomName")->valuestring);
+        cJSON *hn = cJSON_GetObjectItem(homeObj, "homeName");
+        if (hn && cJSON_IsString(hn) && hn->valuestring)
+            strncpy(h->homeName, hn->valuestring, sizeof(h->homeName) - 1);
 
-        cJSON *dList = cJSON_GetObjectItem(room, "devices");
-        r->deviceCount = cJSON_GetArraySize(dList);
+        cJSON *rooms = cJSON_GetObjectItem(homeObj, "rooms");
+        if (!cJSON_IsArray(rooms))
+            continue;
 
-        for (int j = 0; j < r->deviceCount; j++)
+        int roomN = cJSON_GetArraySize(rooms);
+        int maxRooms = (int)(sizeof(h->rooms) / sizeof(h->rooms[0]));
+        if (roomN > maxRooms)
+            roomN = maxRooms;
+
+        h->roomCount = roomN;
+        for (int i = 0; i < roomN; i++)
         {
-            strcpy(r->deviceIds[j], cJSON_GetArrayItem(dList, j)->valuestring);
+            cJSON *room = cJSON_GetArrayItem(rooms, i);
+            Room *r = &h->rooms[i];
+
+            cJSON *rid = cJSON_GetObjectItem(room, "roomId");
+            cJSON *rname = cJSON_GetObjectItem(room, "roomName");
+            if (rid && cJSON_IsString(rid) && rid->valuestring)
+                strncpy(r->roomId, rid->valuestring, sizeof(r->roomId) - 1);
+            if (rname && cJSON_IsString(rname) && rname->valuestring)
+                strncpy(r->roomName, rname->valuestring, sizeof(r->roomName) - 1);
+
+            cJSON *dList = cJSON_GetObjectItem(room, "devices");
+            if (!cJSON_IsArray(dList))
+                continue;
+
+            int devN = cJSON_GetArraySize(dList);
+            int maxDev = (int)(sizeof(r->deviceIds) / sizeof(r->deviceIds[0]));
+            if (devN > maxDev)
+                devN = maxDev;
+
+            r->deviceCount = devN;
+            for (int j = 0; j < devN; j++)
+            {
+                cJSON *dv = cJSON_GetArrayItem(dList, j);
+                if (dv && cJSON_IsString(dv) && dv->valuestring)
+                    strncpy(r->deviceIds[j], dv->valuestring, sizeof(r->deviceIds[j]) - 1);
+            }
         }
+    }
+
+    if (db->homeCount <= 0)
+    {
+        db->homeCount = 1;
+        strncpy(db->homes[0].homeName, "Home_1", sizeof(db->homes[0].homeName) - 1);
+        db->homes[0].roomCount = 0;
+        db->currentHome = 0;
     }
 
     // -------- DEVICES --------
@@ -231,28 +283,35 @@ int save_database(Database *db)
 {
     cJSON *root = cJSON_CreateObject();
 
-    // HOME
-    cJSON *home = cJSON_CreateObject();
-    cJSON_AddItemToObject(root, "home", home);
-    cJSON_AddStringToObject(home, "homeName", db->homeName);
+    // HOME(S)
+    cJSON *homes = cJSON_CreateArray();
+    cJSON_AddItemToObject(root, "home", homes);
 
-    cJSON *rooms = cJSON_CreateArray();
-    cJSON_AddItemToObject(home, "rooms", rooms);
-
-    for (int i = 0; i < db->roomCount; i++)
+    for (int hi = 0; hi < db->homeCount; hi++)
     {
-        Room *r = &db->rooms[i];
-        cJSON *room = cJSON_CreateObject();
-        cJSON_AddItemToArray(rooms, room);
+        Home *h = &db->homes[hi];
+        cJSON *home = cJSON_CreateObject();
+        cJSON_AddItemToArray(homes, home);
+        cJSON_AddStringToObject(home, "homeName", h->homeName);
 
-        cJSON_AddStringToObject(room, "roomId", r->roomId);
-        cJSON_AddStringToObject(room, "roomName", r->roomName);
+        cJSON *rooms = cJSON_CreateArray();
+        cJSON_AddItemToObject(home, "rooms", rooms);
 
-        cJSON *dArr = cJSON_CreateArray();
-        cJSON_AddItemToObject(room, "devices", dArr);
-        for (int j = 0; j < r->deviceCount; j++)
+        for (int i = 0; i < h->roomCount; i++)
         {
-            cJSON_AddItemToArray(dArr, cJSON_CreateString(r->deviceIds[j]));
+            Room *r = &h->rooms[i];
+            cJSON *room = cJSON_CreateObject();
+            cJSON_AddItemToArray(rooms, room);
+
+            cJSON_AddStringToObject(room, "roomId", r->roomId);
+            cJSON_AddStringToObject(room, "roomName", r->roomName);
+
+            cJSON *dArr = cJSON_CreateArray();
+            cJSON_AddItemToObject(room, "devices", dArr);
+            for (int j = 0; j < r->deviceCount; j++)
+            {
+                cJSON_AddItemToArray(dArr, cJSON_CreateString(r->deviceIds[j]));
+            }
         }
     }
 
@@ -381,7 +440,7 @@ void *timer_thread(void *arg)
         int thisMonth = tm_now ? tm_now->tm_mon + 1 : -1;
         int thisYear = tm_now ? tm_now->tm_year + 1900 : -1;
         // timer countdown
-        int changed = 0;
+        // int changed = 0;
         for (int i = 0; i < db->deviceCount; i++)
         {
             Device *dev = &db->devices[i];
@@ -389,10 +448,10 @@ void *timer_thread(void *arg)
             if (dev->state.timer > 0)
             {
                 dev->state.timer--;
-                changed = 1;
+                // changed = 1;
 
-                printf("[Timer] %s: %d seconds remaining\n",
-                       dev->deviceId, dev->state.timer * 10);
+                printf("[Timer] %s: %d minutes remaining\n",
+                       dev->deviceId, dev->state.timer);
 
                 // Nếu timer về 0, thực hiện hành động
                 if (dev->state.timer == 0)
@@ -408,10 +467,10 @@ void *timer_thread(void *arg)
             }
         }
 
-        if (changed)
-        {
-            save_database(db);
-        }
+        // if (changed)
+        // {
+        //     save_database(db);
+        // }
         // power usage update
         for (int i = 0; i < db->deviceCount; i++)
         {
@@ -433,20 +492,19 @@ void *timer_thread(void *arg)
                 dev->powerUsage.lastDay = today;
             }
 
-            // Cập nhật công suất tiêu thụ ngẫu nhiên
             if (strcmp(dev->state.power, "ON") == 0)
             {
                 // Nếu thiết bị đang bật
                 if (strcmp(dev->type, "LIGHT") == 0 || strcmp(dev->type, "light") == 0)
                 {
-                    dev->powerUsage.currentWatt = 100; // Đèn tiêu thụ 10W
+                    dev->powerUsage.currentWatt = 100; // Đèn tiêu thụ 100W
                 }
                 else if (strcmp(dev->type, "FAN") == 0 || strcmp(dev->type, "fan") == 0)
                 {
                     if (dev->state.speed == 1)
-                        dev->powerUsage.currentWatt = 200; // tốc độ thấp tiêu thụ 20W
+                        dev->powerUsage.currentWatt = 200; // tốc độ thấp tiêu thụ 200W
                     else if (dev->state.speed == 2)
-                        dev->powerUsage.currentWatt = 350; // tốc độ trung bình tiêu thụ 35W
+                        dev->powerUsage.currentWatt = 350; // tốc độ trung bình tiêu thụ 350W
                     else if (dev->state.speed == 3)
                         dev->powerUsage.currentWatt = 500; // tốc độ cao tiêu thụ 50W
                 }
@@ -454,15 +512,15 @@ void *timer_thread(void *arg)
                 {
                     if (strcmp(dev->state.mode, "FAN") == 0)
                     {
-                        dev->powerUsage.currentWatt = 900; // chế độ quạt tiêu thụ 500W
+                        dev->powerUsage.currentWatt = 900; // chế độ quạt tiêu thụ 900W
                     }
                     else if (strcmp(dev->state.mode, "COOL") == 0)
                     {
-                        dev->powerUsage.currentWatt = 1500; // chế độ làm mát tiêu thụ 1800W
+                        dev->powerUsage.currentWatt = 1800; // chế độ làm mát tiêu thụ 1800W
                     }
                     else if (strcmp(dev->state.mode, "DRY") == 0)
                     {
-                        dev->powerUsage.currentWatt = 1200; // chế độ kho tiêu thụ 2000W
+                        dev->powerUsage.currentWatt = 2000; // chế độ kho tiêu thụ 2000W
                     }
                 }
             }
@@ -509,21 +567,266 @@ void send_reply(int sock, const char *code)
     snprintf(out, sizeof(out), "%s\r\n", code);
     send(sock, out, strlen(out), 0);
 }
+// ====== GET CURRENT HOME ======
+Home *get_current_home(Database *db)
+{
+    if (db->currentHome < 0 || db->currentHome >= db->homeCount)
+        db->currentHome = 0;
+    return &db->homes[db->currentHome];
+}
+
 // ====== SHOW HOME ======
 void handle_show_home(Database *db, int sock)
 {
     char out[256];
 
-    snprintf(out, sizeof(out), "HOME NAME: %s\r\n", db->homeName);
+    pthread_mutex_lock(&db_mutex);
+    Home *cur = get_current_home(db);
+    if (!cur)
+    {
+        pthread_mutex_unlock(&db_mutex);
+        send(sock, "END\r\n", 5, 0);
+        return;
+    }
+
+    snprintf(out, sizeof(out), "CURRENT HOME: %s\r\n", cur->homeName);
     send(sock, out, strlen(out), 0);
 
-    for (int i = 0; i < db->roomCount; i++)
+    for (int i = 0; i < db->homeCount; i++)
     {
-        Room *r = &db->rooms[i];
-        snprintf(out, sizeof(out), "ROOM: %s (%s)\r\n", r->roomName, r->roomId);
+        Home *h = &db->homes[i];
+        snprintf(out, sizeof(out), "HOME: %s\r\n", h->homeName);
         send(sock, out, strlen(out), 0);
+
+        for (int j = 0; j < h->roomCount; j++)
+        {
+            Room *r = &h->rooms[j];
+            snprintf(out, sizeof(out), "ROOM: %s (%s)\r\n", r->roomName, r->roomId);
+            send(sock, out, strlen(out), 0);
+        }
     }
+
+    pthread_mutex_unlock(&db_mutex);
     send(sock, "END\r\n", 5, 0);
+}
+// ====== ADD DEVICE ======
+void handle_add_device(Database *db, const char *deviceId, const char *roomId, int sockfd)
+{
+    if (!deviceId || deviceId[0] == '\0' || !roomId || roomId[0] == '\0')
+    {
+        send_reply(sockfd, "400");
+        return;
+    }
+
+    pthread_mutex_lock(&db_mutex);
+
+    Home *cur = get_current_home(db);
+
+    Room *targetRoom = NULL;
+    for (int i = 0; i < cur->roomCount; i++)
+    {
+        if (strcmp(cur->rooms[i].roomId, roomId) == 0)
+        {
+            targetRoom = &cur->rooms[i];
+            break;
+        }
+    }
+    if (!targetRoom)
+    {
+        pthread_mutex_unlock(&db_mutex);
+        send_reply(sockfd, "404");
+        return;
+    }
+
+    if (targetRoom->deviceCount >= (int)(sizeof(targetRoom->deviceIds) / sizeof(targetRoom->deviceIds[0])))
+    {
+        pthread_mutex_unlock(&db_mutex);
+        send_reply(sockfd, "231"); // full
+        return;
+    }
+    for (int i = 0; i < cur->roomCount; i++)
+    {
+        Room *r = &cur->rooms[i];
+        for (int j = 0; j < r->deviceCount; j++)
+        {
+            if (strcmp(r->deviceIds[j], deviceId) == 0)
+            {
+                pthread_mutex_unlock(&db_mutex);
+                send_reply(sockfd, "222"); // already exists in another room
+                return;
+            }
+        }
+    }
+
+    strncpy(targetRoom->deviceIds[targetRoom->deviceCount], deviceId, sizeof(targetRoom->deviceIds[targetRoom->deviceCount]) - 1);
+    targetRoom->deviceCount++;
+
+    save_database(db);
+    pthread_mutex_unlock(&db_mutex);
+
+    send_reply(sockfd, "200");
+}
+void handle_delete_device(Database *db, const char *deviceId, int sockfd)
+{
+    pthread_mutex_lock(&db_mutex);
+    //Xoa device khoi Devices list
+    int devIndex = -1;
+    for (int i = 0; i < db->deviceCount; i++)
+    {
+        if (strcmp(db->devices[i].deviceId, deviceId) == 0)
+        {
+            devIndex = i;
+            break;
+        }
+    }
+    if (devIndex != -1)
+    {
+        for (int i = devIndex; i < db->deviceCount - 1; i++)
+        {
+            db->devices[i] = db->devices[i + 1];
+        }
+        db->deviceCount--;
+    }
+    //xoa device khoi room
+    Home *cur = get_current_home(db);
+    Room *targetRoom = NULL;
+    int deviceIndex = -1;
+    for (int i = 0; i < cur->roomCount; i++)
+    {
+        Room *r = &cur->rooms[i];
+        for (int j = 0; j < r->deviceCount; j++)
+        {
+            if (strcmp(r->deviceIds[j], deviceId) == 0)
+            {
+                targetRoom = r;
+                deviceIndex = j;
+                break;
+            }
+        }
+        if (targetRoom)
+            break;
+    }
+    if (!targetRoom || deviceIndex == -1)
+    {
+        pthread_mutex_unlock(&db_mutex);
+        send_reply(sockfd, "404");
+        return;
+    }
+
+    // Xoa deviceId khoi room bang cach copy cac phan tu sau len truoc
+    for (int j = deviceIndex; j < targetRoom->deviceCount - 1; j++)
+    {
+        strcpy(targetRoom->deviceIds[j], targetRoom->deviceIds[j + 1]);
+    }
+    targetRoom->deviceCount--;
+    save_database(db);
+    pthread_mutex_unlock(&db_mutex);
+
+    send_reply(sockfd, "200");
+}
+// ====== SET CURRENT HOME ======
+void handle_set_home(Database *db, const char *homeName, int sockfd)
+{
+    pthread_mutex_lock(&db_mutex);
+    int found = -1;
+    for (int i = 0; i < db->homeCount; i++)
+    {
+        if (strcmp(db->homes[i].homeName, homeName) == 0)
+        {
+            found = i;
+            break;
+        }
+    }
+    if (found < 0)
+    {
+        pthread_mutex_unlock(&db_mutex);
+        send_reply(sockfd, "404");
+        return;
+    }
+    db->currentHome = found;
+    pthread_mutex_unlock(&db_mutex);
+
+    send_reply(sockfd, "200");
+}
+
+// ====== ADD HOME ======
+void handle_add_home(Database *db, const char *homeName, int sockfd)
+{
+    pthread_mutex_lock(&db_mutex);
+
+    int maxHomes = (int)(sizeof(db->homes) / sizeof(db->homes[0]));
+    if (db->homeCount >= maxHomes)
+    {
+        pthread_mutex_unlock(&db_mutex);
+        send_reply(sockfd, "231");
+        return;
+    }
+
+    for (int i = 0; i < db->homeCount; i++)
+    {
+        if (strcmp(db->homes[i].homeName, homeName) == 0)
+        {
+            pthread_mutex_unlock(&db_mutex);
+            send_reply(sockfd, "222");
+            return;
+        }
+    }
+
+    Home *h = &db->homes[db->homeCount];
+    memset(h, 0, sizeof(*h));
+    strncpy(h->homeName, homeName, sizeof(h->homeName) - 1);
+    h->roomCount = 0;
+
+    db->currentHome = db->homeCount;
+    db->homeCount++;
+    save_database(db);
+    pthread_mutex_unlock(&db_mutex);
+
+    send_reply(sockfd, "200");
+}
+
+// ====== ADD ROOM ======
+void handle_add_room(Database *db, const char *roomId, const char *roomName, int sockfd)
+{
+    pthread_mutex_lock(&db_mutex);
+
+    Home *cur = get_current_home(db);
+    if (!cur)
+    {
+        pthread_mutex_unlock(&db_mutex);
+        send_reply(sockfd, "404");
+        return;
+    }
+
+    if (cur->roomCount >= (int)(sizeof(cur->rooms) / sizeof(cur->rooms[0])))
+    {
+        pthread_mutex_unlock(&db_mutex);
+        send_reply(sockfd, "231"); // full
+        return;
+    }
+
+    for (int i = 0; i < cur->roomCount; i++)
+    {
+        if (strcmp(cur->rooms[i].roomId, roomId) == 0)
+        {
+            pthread_mutex_unlock(&db_mutex);
+            send_reply(sockfd, "222"); // already exists
+            return;
+        }
+    }
+
+    Room *r = &cur->rooms[cur->roomCount];
+    strncpy(r->roomId, roomId, sizeof(r->roomId) - 1);
+    r->roomId[sizeof(r->roomId) - 1] = '\0';
+    strncpy(r->roomName, roomName, sizeof(r->roomName) - 1);
+    r->roomName[sizeof(r->roomName) - 1] = '\0';
+    r->deviceCount = 0;
+
+    cur->roomCount++;
+    save_database(db);
+    pthread_mutex_unlock(&db_mutex);
+
+    send_reply(sockfd, "200");
 }
 
 // ====== SHOW ROOM ======
@@ -531,9 +834,18 @@ void handle_show_room(Database *db, const char *roomId, int sock)
 {
     char out[512];
 
-    for (int i = 0; i < db->roomCount; i++)
+    pthread_mutex_lock(&db_mutex);
+    Home *cur = get_current_home(db);
+    if (!cur)
     {
-        Room *r = &db->rooms[i];
+        pthread_mutex_unlock(&db_mutex);
+        send(sock, "END\r\n", 5, 0);
+        return;
+    }
+
+    for (int i = 0; i < cur->roomCount; i++)
+    {
+        Room *r = &cur->rooms[i];
         if (strcmp(r->roomId, roomId) == 0)
         {
             snprintf(out, sizeof(out), "ROOM: %s (%s)\r\n", r->roomName, r->roomId);
@@ -558,10 +870,12 @@ void handle_show_room(Database *db, const char *roomId, int sock)
                 }
             }
             send(sock, "END\r\n", 5, 0);
+            pthread_mutex_unlock(&db_mutex);
             return;
         }
     }
-    // Room not found
+    pthread_mutex_unlock(&db_mutex);
+    send(sock, "404\r\n", 5, 0);
     send(sock, "END\r\n", 5, 0);
 }
 // ====== CHECK TYPE DEVICE ======
@@ -1159,6 +1473,56 @@ void *client_thread(void *arg)
         {
             handle_init(sockfd, db, line);
         }
+        else if (strncmp(line, "ADD HOME ", 9) == 0)
+        {
+            char homeName[128];
+            if (sscanf(line, "ADD HOME %127s", homeName) == 1)
+            {
+                handle_add_home(db, homeName, sockfd);
+            }
+            else
+            {
+                send_reply(sockfd, "203");
+            }
+        }
+        else if (strncmp(line, "SET HOME ", 9) == 0)
+        {
+            char homeName[128];
+            if (sscanf(line, "SET HOME %127s", homeName) == 1)
+            {
+                handle_set_home(db, homeName, sockfd);
+            }
+            else
+            {
+                send_reply(sockfd, "203");
+            }
+        }
+        else if (strncmp(line, "ADD ROOM ", 9) == 0)
+        {
+            char roomId[64];
+            char roomName[128];
+            if (sscanf(line, "ADD ROOM %63s %127s", roomId, roomName) == 2)
+            {
+                handle_add_room(db, roomId, roomName, sockfd);
+            }
+            else
+            {
+                send_reply(sockfd, "203");
+            }
+        }
+        else if (strncmp(line, "ADD DEVICE", 10) == 0)
+        {
+            char deviceId[64];
+            char roomId[64];
+            if (sscanf(line, "ADD DEVICE %63s %63s", deviceId, roomId) == 2)
+            {
+                handle_add_device(db, deviceId, roomId, sockfd);
+            }
+            else
+            {
+                send_reply(sockfd, "203");
+            }
+        }
         else if (strcmp(line, "SHOW HOME") == 0)
         {
             handle_show_home(db, sockfd);
@@ -1166,7 +1530,7 @@ void *client_thread(void *arg)
         else if (strncmp(line, "SHOW ROOM ", 10) == 0)
         {
             char roomId[64];
-            if (sscanf(line + 10, "%63s", roomId) == 1)
+            if (sscanf(line, "SHOW ROOM %63s", roomId) == 1)
             {
                 handle_show_room(db, roomId, sockfd);
             }
@@ -1265,6 +1629,19 @@ void *client_thread(void *arg)
             else
             {
                 send_reply(sockfd, "203"); // invalid format
+            }
+        }
+        else if (strncmp(line, "DELETE DEVICE", 13) == 0)
+        {
+            char deviceId[64];
+            char roomId[64];
+            if (sscanf(line, "DELETE DEVICE %63s", deviceId) == 1)
+            {
+                handle_delete_device(db, deviceId, sockfd);
+            }
+            else
+            {
+                send_reply(sockfd, "203");
             }
         }
         /* ---- Unknown command ---- */

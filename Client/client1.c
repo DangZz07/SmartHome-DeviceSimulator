@@ -52,16 +52,20 @@ void interpret_response(const char *code)
         printf("→ PASSWORD CHANGED OK\n");
     else if (strcmp(code, "211") == 0)
         printf("→ WRONG OLD PASSWORD\n");
+    else if (strcmp(code, "231") == 0)
+        printf("→ FULL \n");
     else if (strcmp(code, "300") == 0)
         printf("→ UNKNOWN COMMAND\n");
     else if (strcmp(code, "500") == 0)
-        printf("500. BAD_REQUEST\n");
+        printf("→ BAD_REQUEST\n");
     else if (strcmp(code, "400") == 0)
-        printf("400. INVALID_VALUE\n");
+        printf("→ INVALID_VALUE\n");
     else if (strcmp(code, "401") == 0)
-        printf("401. INVALID TOKEN\n");
+        printf("→ INVALID TOKEN\n");
     else if (strcmp(code, "221") == 0)
-        printf("221. ALREADY SET/CANCEL\n");
+        printf("→ ALREADY SET/CANCEL\n");
+    else if (strcmp(code, "222") == 0)
+        printf("→ ALREADY EXISTS\n");
     else if (strcmp(code, "405") == 0)
         printf("→ DEVICE NOT SUPPORT SPEED\n");
     else if (strcmp(code, "406") == 0)
@@ -70,6 +74,8 @@ void interpret_response(const char *code)
         printf("→ DEVICE NOT SUPPORT MODE\n");
     else if (strcmp(code, "502") == 0)
         printf("→ DEVICE IS OFF\n");
+    else if (strcmp(code, "404") == 0)
+        printf("→ NOT FOUND\n");
 }
 
 /* ================= RECEIVE LINE (CRLF SAFE) ================= */
@@ -252,6 +258,108 @@ char *find_scan_token(const char *id)
     }
     return NULL;
 }
+void handle_add_device(int sock, char *roomId)
+{
+    char cmd[256];
+    char line[BUF_SIZE];
+    char device_id[64];
+
+    printf("Enter Device ID to add (or 0 to back): ");
+    fgets(device_id, sizeof(device_id), stdin);
+    device_id[strcspn(device_id, "\n")] = 0;
+    if (device_id[0] == '\0' || strcmp(device_id, "0") == 0)
+    {
+        current_screen = SCREEN_SHOW_HOME;
+        return;
+    }
+    snprintf(cmd, sizeof(cmd), "ADD DEVICE %s %s\r\n", device_id, roomId);
+    send(sock, cmd, strlen(cmd), 0);
+    receive_line(sock, line, sizeof(line));
+    interpret_response(line);
+}
+void handle_delete_device(int sock)
+{
+    char cmd[256];
+    char line[BUF_SIZE];
+
+    snprintf(cmd, sizeof(cmd), "DELETE DEVICE %s\r\n", current_device_id);
+    send(sock, cmd, strlen(cmd), 0);
+    receive_line(sock, line, sizeof(line));
+    interpret_response(line);
+
+    // sau khi xoa ve show room
+    current_screen = SCREEN_SHOW_ROOM;
+}
+void handle_select_home_name(int sock)
+{
+    char homeName[128];
+    char cmd[256];
+    char line[BUF_SIZE];
+
+    printf("Enter Home name to select (no spaces, use _): ");
+    fgets(homeName, sizeof(homeName), stdin);
+    homeName[strcspn(homeName, "\n")] = 0;
+
+    if (homeName[0] == '\0')
+    {
+        printf("Invalid value!\n");
+        return;
+    }
+
+    snprintf(cmd, sizeof(cmd), "SET HOME %s\r\n", homeName);
+    send(sock, cmd, strlen(cmd), 0);
+    receive_line(sock, line, sizeof(line));
+    interpret_response(line);
+}
+
+void handle_add_home(int sock)
+{
+    char homeName[128];
+    char cmd[256];
+    char line[BUF_SIZE];
+
+    printf("Enter new Home name (no spaces, use _): ");
+    fgets(homeName, sizeof(homeName), stdin);
+    homeName[strcspn(homeName, "\n")] = 0;
+
+    if (homeName[0] == '\0')
+    {
+        printf("Invalid value!\n");
+        return;
+    }
+
+    snprintf(cmd, sizeof(cmd), "ADD HOME %s\r\n", homeName);
+    send(sock, cmd, strlen(cmd), 0);
+    receive_line(sock, line, sizeof(line));
+    interpret_response(line);
+}
+
+void handle_add_room(int sock)
+{
+    char roomId[64];
+    char roomName[128];
+    char cmd[256];
+    char line[BUF_SIZE];
+
+    printf("Enter Room ID (no spaces, e.g. ROOM_02): ");
+    fgets(roomId, sizeof(roomId), stdin);
+    roomId[strcspn(roomId, "\n")] = 0;
+
+    printf("Enter Room Name (no spaces, use _): ");
+    fgets(roomName, sizeof(roomName), stdin);
+    roomName[strcspn(roomName, "\n")] = 0;
+
+    if (roomId[0] == '\0' || roomName[0] == '\0')
+    {
+        printf("Invalid value!\n");
+        return;
+    }
+
+    snprintf(cmd, sizeof(cmd), "ADD ROOM %s %s\r\n", roomId, roomName);
+    send(sock, cmd, strlen(cmd), 0);
+    receive_line(sock, line, sizeof(line));
+    interpret_response(line);
+}
 void handle_init_device(int sock)
 {
     char id[64], pass[64], type[32];
@@ -296,7 +404,7 @@ void show_home_menu()
     printf("==========================\n");
     printf("Choose: ");
 }
-// khi vào SHOW ROOM
+// khi vao SHOW ROOM
 void enter_show_room(int sock)
 {
     char device_id[64];
@@ -320,7 +428,7 @@ void enter_show_room(int sock)
         return;
     }
 
-    // Thiết bị hợp lệ
+    // thiet bi hop le
     strcpy(current_token, tk);
     strcpy(current_device_id, device_id);
     device_connected = 1;
@@ -334,13 +442,16 @@ void enter_show_home(int sock)
 {
     char choice[8];
 
-    // Scan device trước
+    // Scan device truoc
     send(sock, "SCAN\r\n", 6, 0);
     receive_scan_until_end3(sock);
 
     printf("\n====== HOME ======\n");
     printf("0. Back\n");
     printf("1. Show Room\n");
+    printf("2. Select Home\n");
+    printf("3. Add Room (to current home)\n");
+    printf("4. Add Home\n");
     printf("Choose: ");
     fgets(choice, sizeof(choice), stdin);
 
@@ -349,25 +460,55 @@ void enter_show_home(int sock)
         current_screen = SCREEN_HOME;
         return;
     }
+    if (choice[0] == '2')
+    {
+        handle_select_home_name(sock);
+        send(sock, "SHOW HOME\r\n", 11, 0);
+        receive_scan_until_end(sock);
+        current_screen = SCREEN_SHOW_HOME;
+        return;
+    }
+    if (choice[0] == '3')
+    {
+        handle_add_room(sock);
+        send(sock, "SHOW HOME\r\n", 11, 0);
+        receive_scan_until_end(sock);
+        current_screen = SCREEN_SHOW_HOME;
+        return;
+    }
+    if (choice[0] == '4')
+    {
+        handle_add_home(sock);
+        send(sock, "SHOW HOME\r\n", 11, 0);
+        receive_scan_until_end(sock);
+        current_screen = SCREEN_SHOW_HOME;
+        return;
+    }
     if (choice[0] != '1')
     {
         printf("Invalid choice!\n");
         current_screen = SCREEN_SHOW_HOME;
         return;
     }
-    //neu chon 1
+
+    // neu chon 1
     char roomId[64], cmd[128];
-    printf("\nEnter Room ID: ");
+    printf("\nEnter Room ID (0 to back): ");
     fgets(roomId, sizeof(roomId), stdin);
     roomId[strcspn(roomId, "\n")] = 0;
 
     snprintf(cmd, sizeof(cmd), "SHOW ROOM %s\r\n", roomId);
+    if(roomId[0] == '\0'|| strcmp(roomId, "0") == 0){
+        current_screen = SCREEN_SHOW_HOME;
+        return;
+    }
     send(sock, cmd, strlen(cmd), 0);
     receive_scan_until_end(sock);
 
     printf("\n====== ROOM ======\n");
     printf("0. Back\n");
     printf("1. Manage Device\n");
+    printf("2. Add Device\n");
     printf("Choose: ");
     fgets(choice, sizeof(choice), stdin);
 
@@ -380,13 +521,16 @@ void enter_show_home(int sock)
         current_screen = SCREEN_SHOW_ROOM;
         enter_show_room(sock);
     }
+    else if (choice[0] == '2')
+    {
+        handle_add_device(sock, roomId);
+    }
     else
     {
         printf("Invalid choice!\n");
         current_screen = SCREEN_SHOW_HOME;
     }
 }
-
 
 void handle_home(int sock)
 {
@@ -486,6 +630,7 @@ void show_device_menu()
         printf("7. Mode(Only on AC)\n");
         printf("8. Power Usage\n");
         printf("9. Show information\n");
+        printf("a. Delete Device\n");
     }
 
     printf("0. Back\n");
@@ -509,7 +654,7 @@ void handle_connect(int sock)
     send(sock, cmd, strlen(cmd), 0);
 
     receive_line(sock, line, sizeof(line));
-    printf("%s\n", line);
+    interpret_response(line);
 
     if (strncmp(line, "200", 3) == 0)
     {
@@ -709,9 +854,20 @@ int main(int argc, char *argv[])
 
     server.sin_family = AF_INET;
     server.sin_port = htons(atoi(argv[2]));
-    inet_pton(AF_INET, argv[1], &server.sin_addr);
+    if (inet_pton(AF_INET, argv[1], &server.sin_addr) != 1)
+    {
+        fprintf(stderr, "Invalid server IP: %s\n", argv[1]);
+        close(sock);
+        return 1;
+    }
 
-    connect(sock, (struct sockaddr *)&server, sizeof(server));
+    if (connect(sock, (struct sockaddr *)&server, sizeof(server)) != 0)
+    {
+        perror("connect");
+        fprintf(stderr, "Failed to connect to %s:%s (check server is running and port is open)\n", argv[1], argv[2]);
+        close(sock);
+        return 1;
+    }
 
     char greet[BUF_SIZE];
     receive_line(sock, greet, sizeof(greet));
@@ -776,6 +932,8 @@ int main(int argc, char *argv[])
                     handle_power_usage(sock);
                 else if (c[0] == '9')
                     handle_show_information(sock);
+                else if (c[0] == 'a')
+                    handle_delete_device(sock);
                 else if (c[0] == '0')
                 {
                     if (previous_screen == SCREEN_SHOW_ROOM)
