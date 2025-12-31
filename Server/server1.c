@@ -520,36 +520,36 @@ void *timer_thread(void *arg)
                 // Nếu thiết bị đang bật
                 if (strcmp(dev->type, "LIGHT") == 0 || strcmp(dev->type, "light") == 0)
                 {
-                    dev->powerUsage.currentWatt = 100; // Đèn tiêu thụ 100W
+                    dev->powerUsage.currentWatt = 100; 
                 }
                 else if (strcmp(dev->type, "FAN") == 0 || strcmp(dev->type, "fan") == 0)
                 {
                     if (dev->state.speed == 1)
-                        dev->powerUsage.currentWatt = 200; // tốc độ thấp tiêu thụ 200W
+                        dev->powerUsage.currentWatt = 200; 
                     else if (dev->state.speed == 2)
-                        dev->powerUsage.currentWatt = 350; // tốc độ trung bình tiêu thụ 350W
+                        dev->powerUsage.currentWatt = 350; 
                     else if (dev->state.speed == 3)
-                        dev->powerUsage.currentWatt = 500; // tốc độ cao tiêu thụ 50W
+                        dev->powerUsage.currentWatt = 500; 
                 }
                 else if (strcmp(dev->type, "AC") == 0 || strcmp(dev->type, "ac") == 0)
                 {
                     if (strcmp(dev->state.mode, "FAN") == 0)
                     {
-                        dev->powerUsage.currentWatt = 900; // chế độ quạt tiêu thụ 900W
+                        dev->powerUsage.currentWatt = 900; 
                     }
                     else if (strcmp(dev->state.mode, "COOL") == 0)
                     {
-                        dev->powerUsage.currentWatt = 1800; // chế độ làm mát tiêu thụ 1800W
+                        dev->powerUsage.currentWatt = 1800;
                     }
                     else if (strcmp(dev->state.mode, "DRY") == 0)
                     {
-                        dev->powerUsage.currentWatt = 2000; // chế độ kho tiêu thụ 2000W
+                        dev->powerUsage.currentWatt = 2000; 
                     }
                 }
             }
             else
             {
-                // Nếu thiết bị tắt, công suất là 0W
+               
                 dev->powerUsage.currentWatt = 0;
             }
 

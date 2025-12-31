@@ -150,9 +150,9 @@
 			"powerUsage":	{
 				"currentWatt":	1800,
 				"usageHistory":	{
-					"day":	128.06500000000037,
-					"month":	128.06500000000037,
-					"year":	128.06500000000037
+					"day":	128.51500000000038,
+					"month":	128.51500000000038,
+					"year":	128.51500000000038
 				}
 			},
 			"logs":	[{
@@ -307,8 +307,8 @@
 			"name":	"test",
 			"auth":	{
 				"password":	"1",
-				"connected":	false,
-				"Token":	""
+				"connected":	true,
+				"Token":	"E6C3382C238A6A59"
 			},
 			"state":	{
 				"power":	"OFF",

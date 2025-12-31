@@ -19,7 +19,7 @@ typedef enum
 } Screen;
 
 Screen current_screen = SCREEN_HOME;
-Screen previous_screen = SCREEN_HOME; // chi dung cho back tu device ve show room
+Screen previous_screen = SCREEN_HOME; // only use for returning from device screen
 /* ===== DEVICE STATE ===== */
 char current_device_id[64] = "";
 char current_token[64] = "";
@@ -90,20 +90,20 @@ int receive_line(int sock, char *buffer, size_t size)
 
     while (1)
     {
-        // 1. Kiểm tra xem trong 'message' hiện tại đã có dòng nào chưa (\r\n)
+        
         char *pos = strstr(message, "\r\n");
         if (pos != NULL)
         {
             int line_len = (int)(pos - message);
 
-            // Chỉ copy tối đa 'size - 1' để tránh tràn bộ đệm 'buffer'
+            
             int copy_len = (line_len < (int)size - 1) ? line_len : (int)size - 1;
 
             memcpy(buffer, message, copy_len);
             buffer[copy_len] = '\0';
 
-            // Dịch chuyển phần dư lên đầu
-            int consumed = line_len + 2; // +2 là cho \r\n
+            
+            int consumed = line_len + 2; // +2 for \r\n
             int remaining = message_len - consumed;
 
             if (remaining > 0)
@@ -111,26 +111,26 @@ int receive_line(int sock, char *buffer, size_t size)
                 memmove(message, message + consumed, remaining);
             }
             message_len = remaining;
-            message[message_len] = '\0'; // Luôn kết thúc chuỗi để strstr chạy đúng lần sau
+            message[message_len] = '\0'; 
 
             return 1;
         }
 
-        // 2. Nhận thêm một khối dữ liệu lớn
+        
         int n = recv(sock, temp_buff, sizeof(temp_buff) - 1, 0);
         if (n <= 0)
             return 0;
 
-        // 3. Nối vào bộ đệm tích lũy bằng memcpy (an toàn và nhanh hơn strcat)
+        
         if (message_len + n < (int)sizeof(message) - 1)
         {
             memcpy(message + message_len, temp_buff, n);
             message_len += n;
-            message[message_len] = '\0'; // Cực kỳ quan trọng để strstr tìm thấy điểm dừng
+            message[message_len] = '\0'; 
         }
         else
         {
-            // Buffer quá đầy mà không thấy \r\n, reset để tránh treo
+           
             message_len = 0;
             message[0] = '\0';
         }
@@ -147,8 +147,7 @@ int receive_scan_until_end(int sock)
     {
         if (!receive_line(sock, line, sizeof(line)))
             return 0;
-        // Server may return not-found as a single code line (e.g. 404) before END.
-        // Always drain until END to keep the stream aligned for the next request.
+        
         if (strcmp(line, "1000") == 0)
         {
             not_found = 1;
@@ -221,6 +220,15 @@ int receive_scan_until_end2(int sock)
         else
         {
             // NEW DEVICE
+            char id[64] = "", type[32] = "";
+            int n = sscanf(line, "%63s || %31s", id, type);
+            if (n >= 1 && id[0] != '\0') {
+                strcpy(scan_tokens[scan_token_count].id, id);
+                scan_tokens[scan_token_count].token[0] = '\0';
+                if (n == 2) strcpy(scan_tokens[scan_token_count].type, type);
+                else scan_tokens[scan_token_count].type[0] = '\0';
+                scan_token_count++;
+            }
             printf("%s\n", line);
         }
     }
@@ -624,18 +632,6 @@ void handle_home(int sock)
         receive_scan_until_end(sock);
         enter_show_home(sock);
     }
-    // else if (c[0] == '2')
-    // {
-    //     char room[64], cmd[128];
-    //     printf("Enter Room ID: ");
-    //     fgets(room, sizeof(room), stdin);
-    //     room[strcspn(room, "\n")] = 0;
-
-    //     snprintf(cmd, sizeof(cmd),
-    //              "SHOW ROOM %s\r\n", room);
-    //     send(sock, cmd, strlen(cmd), 0);
-    //     receive_scan_until_end(sock);
-    // }
     else if (c[0] == '2')
     {
         current_screen = SCREEN_SCAN;
@@ -659,6 +655,14 @@ void show_scan(int sock)
     printf("\nEnter device ID (or 0 to back): ");
 }
 
+int exists_scan_id(const char *id) {
+    for (int i = 0; i < scan_token_count; i++) {
+        if (strcmp(scan_tokens[i].id, id) == 0)
+            return 1;
+    }
+    return 0;
+}
+
 void handle_scan()
 {
     char id[64];
@@ -671,6 +675,13 @@ void handle_scan()
         return;
     }
 
+    if (!exists_scan_id(id))
+    {
+        printf("Device not found\n");
+        current_screen = SCREEN_SCAN; 
+        return;
+    }
+
     strcpy(current_device_id, id);
 
     char *tk = find_scan_token(id);
@@ -680,21 +691,19 @@ void handle_scan()
     {
         strcpy(current_device_type, tp);
     }
-    if (tk)
+    if (tk && tk[0] != '\0')
     {
-        // MY DEVICE
         strcpy(current_token, tk);
         device_connected = 1;
     }
     else
     {
-        // NEW DEVICE
         current_token[0] = '\0';
         device_connected = 0;
     }
-
     current_screen = SCREEN_DEVICE;
 }
+
 
 /* ================= DEVICE MENU ================= */
 void show_device_menu()
@@ -746,6 +755,14 @@ void handle_connect(int sock)
     {
         sscanf(line, "200 %*s %63s", current_token);
         device_connected = 1;
+
+        send(sock, "SCAN\r\n", 6, 0);
+        receive_scan_until_end2(sock);
+
+        char *tp = find_scan_type(current_device_id);
+        if (tp && tp[0] != '\0') {
+            strcpy(current_device_type, tp);
+        }
     }
 }
 
